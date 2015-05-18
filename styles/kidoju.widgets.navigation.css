@@ -1,0 +1,10 @@
+.kj-navigation {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  border: none;
+}
+.kj-navigation .kj-hint {
+  opacity: 0.8;
+  filter: alpha(opacity=80);
+}
