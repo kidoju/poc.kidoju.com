@@ -8,7 +8,7 @@
 
 (function(f, define){
     'use strict';
-    define(['./kidoju.data', './kidoju.tools'], f);
+    define(['./vendor/kendo/kendo.binder', './kidoju.data', './kidoju.tools'], f);
 })(function() {
 
     'use strict';
@@ -502,4 +502,4 @@
 
     return window.kendo;
 
-}, typeof define === 'function' && define.amd ? define : function(_, f){ 'use strict'; f(); });
+}, typeof define === 'function' && define.amd ? define : function (_, f) { 'use strict'; f(); });
