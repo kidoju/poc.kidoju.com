@@ -1,0 +1,32 @@
+.kj-assetmanager .k-tabstrip-left > div.k-content {
+    padding: 0;
+}
+.kj-assetmanager .k-filebrowser {
+    padding: 0.5em;
+}
+.kj-assetmanager .k-filebrowser .k-filebrowser-toolbar {
+    margin: 0;
+}
+.kj-assetmanager .k-filebrowser .k-filebrowser-toolbar .k-upload {
+    margin-right: .3em;
+}
+.kj-assetmanager .k-filebrowser .k-filebrowser-toolbar .k-upload .k-icon {
+    vertical-align: middle;
+}
+.kj-assetmanager .k-filebrowser .k-filebrowser-toolbar .k-textbox {
+    width: 100%;
+}
+.kj-assetmanager .k-filebrowser .k-filebrowser-toolbar .k-textbox .k-search {
+    top: 50%;
+    margin: -8px 0 0;
+}
+.kj-assetmanager .k-filebrowser .k-listview.k-tiles {
+    border-top-style: none;
+    height: 400px;
+    margin: 0;
+    overflow: auto;
+}
+.kj-assetmanager .k-filebrowser .k-listview.k-tiles .k-tile .k-image {
+    width: 80px;
+    height: auto;
+}

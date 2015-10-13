@@ -6,62 +6,65 @@
 /* jshint browser: true, jquery: true */
 /* globals define: false */
 
-(function(f, define){
+(function (f, define) {
     'use strict';
-    define(['./vendor/kendo/kendo.binder', './kidoju.data', './kidoju.tools'], f);
-})(function() {
+    define([
+        './vendor/kendo/kendo.binder',
+        './kidoju.data',
+        './kidoju.tools',
+        './window.assert',
+        './window.log'
+    ], f);
+})(function () {
 
     'use strict';
+
+    /* This function has too many statements. */
+    /* jshint -W071 */
 
     (function ($, undefined) {
 
         // shorten references to variables for uglification
-        //var fn = Function,
-        //    global = fn('return this')(),
-        var kendo = window.kendo,
-            data = kendo.data,
-            Widget = kendo.ui.Widget,
-            kidoju = window.kidoju,
-
-        //Types
-            STRING = 'string',
-            NUMBER = 'number',
-            NULL = null,
-
-        //Events
-            CHANGE = 'change',
-            CLICK = 'click',
-            DATABINDING = 'dataBinding',
-            DATABOUND = 'dataBound',
-            MOUSEENTER = 'mouseenter',
-            MOUSELEAVE = 'mouseleave',
-            FOCUS = 'focus',
-            BLUR = 'blur',
-            SELECT = 'select',
-            NS = '.kendoExplorer',
-
-        //Widget
-            WIDGET_CLASS = 'k-widget k-group kj-explorer', //k-list-container k-reset
-            HOVER_CLASS = 'k-state-hover',
-            FOCUSED_CLASS = 'k-state-focused',
-            SELECTED_CLASS = 'k-state-selected',
-            DATA_UID = kendo.attr('uid'),
-            ALL_ITEMS_SELECTOR = 'li.kj-item[' + DATA_UID + ']',
-            ITEM_BYUID_SELECTOR = 'li.kj-item[' + DATA_UID + '="{0}"]',
-            ARIA_SELECTED = 'aria-selected';
+        // var fn = Function,
+        //     global = fn('return this')(),
+        var kendo = window.kendo;
+        var data = kendo.data;
+        var ObservableArray = kendo.data.ObservableArray;
+        var Widget = kendo.ui.Widget;
+        var kidoju = window.kidoju;
+        var PageComponent = kidoju.data.PageComponent;
+        var PageComponentCollectionDataSource = kidoju.data.PageComponentCollectionDataSource;
+        var PageCollectionDataSource = kidoju.data.PageCollectionDataSource;
+        // var assert = window.assert
+        var logger = new window.Log('kidoju.widgets.explorer');
+        var STRING = 'string';
+        var NUMBER = 'number';
+        var NULL = null;
+        var CHANGE = 'change';
+        var CLICK = 'click';
+        var DATABINDING = 'dataBinding';
+        var DATABOUND = 'dataBound';
+        var MOUSEENTER = 'mouseenter';
+        var MOUSELEAVE = 'mouseleave';
+        var FOCUS = 'focus';
+        var BLUR = 'blur';
+        var SELECT = 'select';
+        var NS = '.kendoExplorer';
+        var WIDGET_CLASS = 'k-widget k-group kj-explorer'; // k-list-container k-reset
+        var HOVER_CLASS = 'k-state-hover';
+        var FOCUSED_CLASS = 'k-state-focused';
+        var SELECTED_CLASS = 'k-state-selected';
+        var DATA_UID = kendo.attr('uid');
+        var ALL_ITEMS_SELECTOR = 'li.kj-item[' + DATA_UID + ']';
+        var ITEM_BYUID_SELECTOR = 'li.kj-item[' + DATA_UID + '="{0}"]';
+        var ARIA_SELECTED = 'aria-selected';
 
         /*********************************************************************************
          * Helpers
          *********************************************************************************/
 
-        function log(message) {
-            if (window.app && window.app.DEBUG && window.console && $.isFunction(window.console.log)) {
-                window.console.log('kidoju.widgets.explorer: ' + message);
-            }
-        }
-
         function isGuid(value) {
-            //http://stackoverflow.com/questions/7905929/how-to-test-valid-uuid-guid
+            // http://stackoverflow.com/questions/7905929/how-to-test-valid-uuid-guid
             return ($.type(value) === STRING) && (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value));
         }
 
@@ -80,11 +83,11 @@
                 var that = this;
                 // base call to widget initialization
                 Widget.fn.init.call(this, element, options);
-                log('widget initialized');
+                logger.debug('widget initialized');
                 that._templates();
                 that._layout();
                 that._dataSource();
-                //that.refresh();
+                // that.refresh();
             },
 
             /**
@@ -108,7 +111,7 @@
              */
             setOptions: function (options) {
                 Widget.fn.setOptions.call(this, options);
-                //TODO initialize properly from that.options.index and that.options.id
+                // TODO initialize properly from that.options.index and that.options.id
             },
 
             /**
@@ -128,7 +131,8 @@
              * @returns {*}
              */
             index: function (index) {
-                var that = this, component;
+                var that = this;
+                var component;
                 if (index !== undefined) {
                     if ($.type(index) !== NUMBER || index % 1 !== 0) {
                         throw new TypeError();
@@ -140,7 +144,7 @@
                     }
                 } else {
                     component = that.dataSource.getByUid(that._selectedUid);
-                    if (component instanceof kidoju.PageComponent) {
+                    if (component instanceof PageComponent) {
                         return that.dataSource.indexOf(component);
                     } else {
                         return -1;
@@ -154,7 +158,8 @@
              * @returns {*}
              */
             id: function (id) {
-                var that = this, component;
+                var that = this;
+                var component;
                 if (id !== undefined) {
                     if ($.type(id) !== NUMBER && $.type(id) !== STRING) {
                         throw new TypeError();
@@ -163,11 +168,14 @@
                     that.value(component);
                 } else {
                     component = that.dataSource.getByUid(that._selectedUid);
-                    if (component instanceof kidoju.PageComponent) {
+                    if (component instanceof PageComponent) {
                         return component[component.idField];
                     }
                 }
             },
+
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
 
             /**
              * Gets/Sets the value of the selected component in the explorer
@@ -180,7 +188,7 @@
                 if (component === NULL) {
                     if (that._selectedUid !== NULL) {
                         that._selectedUid = NULL;
-                        log('selected component uid set to null');
+                        logger.debug('selected component uid set to null');
                         that._toggleSelection();
                         that.trigger(CHANGE, {
                             index: undefined,
@@ -188,7 +196,7 @@
                         });
                     }
                 } else if (component !== undefined) {
-                    if (!(component instanceof kidoju.PageComponent)) {
+                    if (!(component instanceof PageComponent)) {
                         throw new TypeError();
                     }
                     // Note: when that.value() was previously named that.selection() with a custom binding
@@ -201,7 +209,7 @@
                         var index = that.dataSource.indexOf(component);
                         if (index > -1) {
                             that._selectedUid = component.uid;
-                            log('selected component uid set to ' + component.uid);
+                            logger.debug('selected component uid set to ' + component.uid);
                             that._toggleSelection();
                             that.trigger(CHANGE, {
                                 index: index,
@@ -213,17 +221,19 @@
                     if (that._selectedUid === NULL) {
                         return NULL;
                     } else {
-                        return that.dataSource.getByUid(that._selectedUid); //Returns undefined if not found
+                        return that.dataSource.getByUid(that._selectedUid); // Returns undefined if not found
                     }
                 }
             },
+
+            /* jshint +W074 */
 
             /**
              * @method total()
              * @returns {*}
              */
             length: function () {
-                return (this.dataSource instanceof kidoju.PageComponentCollectionDataSource) ? this.dataSource.total() : -1;
+                return (this.dataSource instanceof PageComponentCollectionDataSource) ? this.dataSource.total() : -1;
             },
 
             /**
@@ -268,15 +278,16 @@
                 // if the DataSource is defined and the _refreshHandler is wired up, unbind because
                 // we need to rebuild the DataSource
 
-                //There is no reason why, in its current state, it would not work with any dataSource
-                //if ( that.dataSource instanceof data.DataSource && that._refreshHandler ) {
-                if (that.dataSource instanceof kidoju.PageComponentCollectionDataSource && that._refreshHandler) {
+                // There is no reason why, in its current state, it would not work with any dataSource
+                // if ( that.dataSource instanceof data.DataSource && that._refreshHandler ) {
+                if (that.dataSource instanceof PageComponentCollectionDataSource && that._refreshHandler) {
                     that.dataSource.unbind(CHANGE, that._refreshHandler);
                 }
 
-                if (that.options.dataSource !== NULL) {  //use null to explicitely destroy the dataSource bindings
+                if (that.options.dataSource !== NULL) {  // use null to explicitely destroy the dataSource bindings
+
                     // returns the datasource OR creates one if using array or configuration object
-                    that.dataSource = kidoju.PageComponentCollectionDataSource.create(that.options.dataSource);
+                    that.dataSource = PageComponentCollectionDataSource.create(that.options.dataSource);
 
                     that._refreshHandler = $.proxy(that.refresh, that);
 
@@ -295,15 +306,15 @@
              */
             _layout: function () {
                 var that = this;
-                //Add wrapper property for visible bindings
+                // Add wrapper property for visible bindings
                 that.wrapper = that.element;
-                //Add ul property
+                // Add ul property
                 that.ul = that.element.find('ul.k-list');
                 if (!that.ul.length) {
                     that.ul = $('<ul tabindex="-1" unselectable="on" role="listbox" class="k-list k-reset" />')
                         .appendTo(that.element);
                 }
-                //Define element
+                // Define element
                 that.element
                     .addClass(WIDGET_CLASS)
                     .attr('role', 'listbox')
@@ -313,32 +324,32 @@
                 kendo.notify(that);
             },
 
-            //TODO add sorting
+            // TODO add sorting
 
             /**
              * Add an explorer item (li) corresponding to a component
              * @param component
-             * @param index //TODO: with sorting
+             * @param index // TODO: with sorting
              * @private
              */
             _addItem: function (component, index) {
                 var that = this;
 
-                //Check that we get a component that is not already in explorer
+                // Check that we get a component that is not already in explorer
                 if (that.ul instanceof $ && that.ul.length &&
-                    component instanceof kidoju.PageComponent &&
+                    component instanceof PageComponent &&
                     that.ul.find(kendo.format(ITEM_BYUID_SELECTOR, component.uid)).length === 0) {
 
                     var tool = kidoju.tools[component.tool];
                     if (tool instanceof kidoju.Tool) {
-                        //Create explorer item
+                        // Create explorer item
                         var item = that.itemTemplate({
                             uid: component.uid,
-                            tool: component.tool, //also tool.id
+                            tool: component.tool, // also tool.id
                             icon: that.options.iconPath + tool.icon + '.svg'
                         });
-                        //Add to explorer list
-                        that.ul.append(item); //TODO <----------------------------------------------------- index??????
+                        // Add to explorer list
+                        that.ul.append(item); // TODO <----------------------------------------------------- index??????
                     }
                 }
             },
@@ -350,7 +361,7 @@
              */
             _removeItemByUid: function (uid) {
                 if (this.ul instanceof $ && this.ul.length) {
-                    //Find and remove an explorer item
+                    // Find and remove an explorer item
                     var item = this.ul.find(kendo.format(ITEM_BYUID_SELECTOR, uid));
                     item.off().remove();
                 }
@@ -361,8 +372,11 @@
              * @param e
              */
             refresh: function (e) {
-                var that = this,
-                    html = '';
+                /* This function's cyclomatic complexity is too high. */
+                /* jshint +W074 */
+
+                var that = this;
+                var html = '';
 
                 if (e && e.action === undefined) {
                     that.trigger(DATABINDING);
@@ -370,9 +384,9 @@
 
                 if (e === undefined || e.action === undefined) {
                     var components = [];
-                    if (e === undefined && that.dataSource instanceof kidoju.PageCollectionDataSource) {
+                    if (e === undefined && that.dataSource instanceof PageCollectionDataSource) {
                         components = that.dataSource.data();
-                    } else if (e && e.items instanceof kendo.data.ObservableArray) {
+                    } else if (e && e.items instanceof ObservableArray) {
                         components = e.items;
                     }
                     $.each(that.element.find(ALL_ITEMS_SELECTOR), function (index, item) {
@@ -384,33 +398,32 @@
                 } else if (e.action === 'add' && $.isArray(e.items) && e.items.length) {
                     $.each(e.items, function (index, component) {
                         that._addItem(component);
-                        that.trigger(CHANGE, {action: e.action, value: component}); //TODO <--------------------------------------------
+                        that.trigger(CHANGE, { action: e.action, value: component }); // TODO <--------------------------------------------
                     });
-                    //that.select(e.items[e.items.length -1]); //TODO <---------------------------------------------
+                    // that.select(e.items[e.items.length -1]); // TODO <---------------------------------------------
                 } else if (e.action === 'remove' && $.isArray(e.items) && e.items.length) {
                     $.each(e.items, function (index, page) {
                         that._removeItemByUid(page.uid);
-                        that.trigger(CHANGE, {action: e.action, value: page});
-                        //that._selectByUid(null); //TODO
+                        that.trigger(CHANGE, { action: e.action, value: page });
+                        // that._selectByUid(null); // TODO
                     });
 
                 } else if (e.action === 'itemchange') {
-                    $.noop(); //TODO
+                    $.noop(); // TODO
                 }
 
-                //Display a message when there is nothing to display
-                //if (html.length === 0) {
-                //    html = that.options.messages.empty; //TODO: improve
-                //}
+                // Display a message when there is nothing to display
+                // if (html.length === 0) {
+                //     html = that.options.messages.empty; // TODO: improve
+                // }
 
                 that._toggleSelection();
 
                 if (e && e.action === undefined) {
                     that.trigger(DATABOUND);
                 }
-
+                /* jshint -W074 */
             },
-
 
             /**
              * Toggles class on selected item determined by value of widget
@@ -472,11 +485,11 @@
              * @private
              */
             _clear: function () {
-                var that = this,
-                    explorer = that.element;
-                //unbind kendo
+                var that = this;
+                var explorer = that.element;
+                // unbind kendo
                 kendo.unbind(explorer);
-                //unbind all other events
+                // unbind all other events
                 explorer.find('*').off();
                 explorer
                     .off(NS)
@@ -499,6 +512,8 @@
         kendo.ui.plugin(Explorer);
 
     }(window.jQuery));
+
+    /* jshint +W071 */
 
     return window.kendo;
 

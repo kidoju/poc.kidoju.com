@@ -8,48 +8,49 @@
 
 (function (f, define) {
     'use strict';
-    define(['./vendor/kendo/kendo.binder', './kidoju.data', './kidoju.tools'], f);
+    define([
+        './vendor/kendo/kendo.binder',
+        './kidoju.data',
+        './kidoju.tools',
+        './window.assert',
+        './window.log'
+    ], f);
 })(function () {
 
     'use strict';
 
+    /* This function has too many statements. */
+    /* jshint -W071 */
+
     (function ($, undefined) {
 
-        var kendo = window.kendo,
-            data = kendo.data,
-            Widget = kendo.ui.Widget,
-            kidoju = window.kidoju,
-
-        // Types
-            STRING = 'string',
-            NUMBER = 'number',
-            NULL = null,
-
-        // Events
-            CHANGE = 'change',
-            CLICK = 'click',
-            DATABINDING = 'dataBinding',
-            DATABOUND = 'dataBound',
-            KEYDOWN = 'keydown',
-            NS = '.kendoPlayBar',
-
-        // Widget
-            WIDGET_CLASS = 'k-widget k-pager-wrap kj-playbar',
-            FIRST = '.k-i-seek-w',
-            LAST = '.k-i-seek-e',
-            PREV = '.k-i-arrow-w',
-            NEXT = '.k-i-arrow-e',
-            TICK = '.k-i-tick';
+        var kendo = window.kendo;
+        var data = kendo.data;
+        var Widget = kendo.ui.Widget;
+        var kidoju = window.kidoju;
+        var Page = kidoju.data.Page;
+        var PageCollectionDataSource = kidoju.data.PageCollectionDataSource;
+        // var assert = window.assert;
+        var logger = new window.Log('kidoju.widgets.playbar');
+        var STRING = 'string';
+        var NUMBER = 'number';
+        var NULL = null;
+        var CHANGE = 'change';
+        var CLICK = 'click';
+        var DATABINDING = 'dataBinding';
+        var DATABOUND = 'dataBound';
+        var KEYDOWN = 'keydown';
+        var NS = '.kendoPlayBar';
+        var WIDGET_CLASS = 'k-widget k-pager-wrap kj-playbar';
+        var FIRST = '.k-i-seek-w';
+        var LAST = '.k-i-seek-e';
+        var PREV = '.k-i-arrow-w';
+        var NEXT = '.k-i-arrow-e';
+        var TICK = '.k-i-tick';
 
         /*********************************************************************************
          * Helpers
          *********************************************************************************/
-
-        function log(message) {
-            if (window.app && window.app.DEBUG && window.console && $.isFunction(window.console.log)) {
-                window.console.log('kidoju.widgets.playbar: ' + message);
-            }
-        }
 
         function isGuid(value) {
             // http://stackoverflow.com/questions/7905929/how-to-test-valid-uuid-guid
@@ -124,7 +125,7 @@
                 options = options || {};
                 // base call to widget initialization
                 Widget.fn.init.call(that, element, options);
-                log('widget initialized');
+                logger.debug('widget initialized');
                 // TODO: review how index is set
                 that._selectedIndex = that.options.index || 0;
                 that._templates();
@@ -183,6 +184,9 @@
                 DATABOUND
             ],
 
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
+
             /**
              * Gets/Sets the index of the selected page in the playbar
              * Note: index is 0 based, whereas playbar page numbers are 1 based
@@ -199,9 +203,9 @@
                         throw new RangeError();
                     } else if (index !== that._selectedIndex) {
                         var page = that.dataSource.at(index);
-                        if (page instanceof kidoju.Page) {
+                        if (page instanceof Page) {
                             that._selectedIndex = index;
-                            log('selected index set to ' + index);
+                            logger.debug('selected index set to ' + index);
                             that.refresh();
                             that.trigger(CHANGE, {
                                 index: index,
@@ -214,6 +218,8 @@
                 }
             },
 
+            /* jshint +W074 */
+
             /**
              * Gets/Sets the id of the selected page in the playbar
              * @method id
@@ -221,7 +227,8 @@
              * @returns {*}
              */
             id: function (id) {
-                var that = this, page;
+                var that = this;
+                var page;
                 if (id !== undefined) {
                     if ($.type(id) !== STRING && $.type(id) !== NUMBER) {
                         throw new TypeError();
@@ -236,7 +243,7 @@
                     }
                 } else {
                     page = that.dataSource.at(that._selectedIndex);
-                    if (page instanceof kidoju.Page) {
+                    if (page instanceof Page) {
                         return page[page.idField];
                     }
                 }
@@ -253,7 +260,7 @@
                 if (page === NULL) {
                     $.noop(); // TODO
                 } else if (page !== undefined) {
-                    if (!(page instanceof kidoju.Page)) {
+                    if (!(page instanceof Page)) {
                         throw new TypeError();
                     }
                     var index = that.dataSource.indexOf(page);
@@ -270,7 +277,7 @@
              * @returns {*}
              */
             length: function () {
-                return (this.dataSource instanceof kidoju.PageCollectionDataSource) ? this.dataSource.total() : -1;
+                return (this.dataSource instanceof PageCollectionDataSource) ? this.dataSource.total() : -1;
             },
 
             /**
@@ -318,13 +325,13 @@
 
                 // There is no reason why, in its current state, it would not work with any dataSource
                 // if ( that.dataSource instanceof data.DataSource && that._refreshHandler ) {
-                if (that.dataSource instanceof kidoju.PageCollectionDataSource && that._refreshHandler) {
+                if (that.dataSource instanceof PageCollectionDataSource && that._refreshHandler) {
                     that.dataSource.unbind(CHANGE, that._refreshHandler);
                 }
 
                 if (that.options.dataSource !== NULL) {  // use null to explicitely destroy the dataSource bindings
                     // returns the datasource OR creates one if using array or configuration object
-                    that.dataSource = kidoju.PageCollectionDataSource.create(that.options.dataSource);
+                    that.dataSource = PageCollectionDataSource.create(that.options.dataSource);
 
                     that._refreshHandler = $.proxy(that.refresh, that);
 
@@ -337,6 +344,9 @@
                 }
             },
 
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
+
             /**
              * Builds the widget layout
              * @method _layout
@@ -348,11 +358,11 @@
                  * TODO: Add progress bar
                  * TODO: Add tooltips with thumbnails
                  */
-                var that = this,
-                    playbar = that.element,
-                    options = that.options,
-                    index = that.index(),
-                    length = that.length();
+                var that = this;
+                var playbar = that.element;
+                var options = that.options;
+                var index = that.index();
+                var length = that.length();
 
                 // Add first and previous buttons
                 if (options.previousNext) {
@@ -435,19 +445,27 @@
                 kendo.notify(that);
             },
 
+            /* jshint +W074 */
+
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
+
             /**
-             * Refreshed teh widget when dataSource changes
+             * Refresh the widget when dataSource changes
              * @method refresh
              * @param e
              */
             refresh: function (e) {
-                var that = this,
-                    playbar = that.element,
-                    options = that.options,
-                    index = that.index(),
-                    length = that.length(),
-                    idx, start = 0, end,
-                    html = '', position;
+                var that = this;
+                // var playbar = that.element;
+                var options = that.options;
+                var index = that.index();
+                var length = that.length();
+                var idx;
+                var start = 0;
+                var end;
+                var html = '';
+                // var position;
 
                 if (e && e.action === 'itemchange') {
                     return; // we only update the playbar on loading, 'add' and 'remove'
@@ -475,7 +493,7 @@
                         html += button(that.linkTemplate, idx, '...', false, options.messages.morePages);
                     }
                     if (html === '') {
-                        html = that.selectTemplate({text: 0});
+                        html = that.selectTemplate({ text: 0 });
                     }
                     that.list.html(html);
                 }
@@ -515,9 +533,11 @@
                 if (e && e.action === undefined) {
                     // TODO: we are cheating here: we should have in addedDataItems the pages displayed as numbers
                     // Without addedDataItems, it fails because all data items are not displayed
-                    that.trigger(DATABOUND, {addedDataItems: []});
+                    that.trigger(DATABOUND, { addedDataItems: [] });
                 }
             },
+
+            /* jshint +W074 */
 
             /**
              * Event handler triggered
@@ -526,8 +546,8 @@
              */
             _keydown: function (e) {
                 if (e instanceof $.Event && e.keyCode === kendo.keys.ENTER) {
-                    var input = this.element.find('.k-pager-input').find('input'),
-                        pageNum = parseInt(input.val(), 10);
+                    var input = this.element.find('.k-pager-input').find('input');
+                    var pageNum = parseInt(input.val(), 10);
                     if (isNaN(pageNum) || pageNum < 1 || pageNum > this.length()) {
                         pageNum = this.index() + 1;
                     }
@@ -602,6 +622,8 @@
         kendo.ui.plugin(PlayBar);
 
     }(window.jQuery));
+
+    /* jshint +W071 */
 
     return window.kendo;
 

@@ -8,55 +8,58 @@
 
 (function (f, define) {
     'use strict';
-    define(['./vendor/kendo/kendo.binder', './kidoju.data', './kidoju.tools'], f);
+    define([
+        './vendor/kendo/kendo.binder',
+        './kidoju.data',
+        './kidoju.tools',
+        './window.assert',
+        './window.log'
+    ], f);
 })(function () {
 
     'use strict';
 
+    /* This function has too many statements. */
+    /* jshint -W071 */
+
     (function ($, undefined) {
 
-        var kendo = window.kendo,
-            data = kendo.data,
-            Widget = kendo.ui.Widget,
-            kidoju = window.kidoju,
-
-        // Types
-            NULL = null,
-            NUMBER = 'number',
-            STRING = 'string',
-
-        // Events
-            CHANGE = 'change',
-            CLICK = 'click',
-            DATABINDING = 'dataBinding',
-            DATABOUND = 'dataBound',
-            MOUSEENTER = 'mouseenter',
-            MOUSELEAVE = 'mouseleave',
-            FOCUS = 'focus',
-            BLUR = 'blur',
-            SELECT = 'select',
-            NS = '.kendoNavigation',
-
-        // Widget
-            WIDGET_CLASS = 'k-widget k-group kj-navigation',
-            HOVER_CLASS = 'k-state-hover',
-            FOCUSED_CLASS = 'k-state-focused',
-            SELECTED_CLASS = 'k-state-selected',
-            HINT_CLASS = 'kj-hint',
-            DATA_UID = kendo.attr('uid'),
-            ALL_ITEMS_SELECTOR = 'div.kj-item[' + DATA_UID + ']',
-            ITEM_BYUID_SELECTOR = 'div.kj-item[' + DATA_UID + '="{0}"]',
-            ARIA_SELECTED = 'aria-selected';
+        var kendo = window.kendo;
+        var data = kendo.data;
+        var ObservableArray = data.ObservableArray;
+        var Widget = kendo.ui.Widget;
+        var kidoju = window.kidoju;
+        var Page = kidoju.data.Page;
+        var PageCollectionDataSource = kidoju.data.PageCollectionDataSource;
+        // var assert = window.assert;
+        var logger = new window.Log('kidoju.widgets.navigation');
+        var NULL = null;
+        var NUMBER = 'number';
+        var STRING = 'string';
+        var UNDEFINED = 'undefined';
+        var CHANGE = 'change';
+        var CLICK = 'click';
+        var DATABINDING = 'dataBinding';
+        var DATABOUND = 'dataBound';
+        var MOUSEENTER = 'mouseenter';
+        var MOUSELEAVE = 'mouseleave';
+        var FOCUS = 'focus';
+        var BLUR = 'blur';
+        var SELECT = 'select';
+        var NS = '.kendoNavigation';
+        var WIDGET_CLASS = 'k-widget k-group kj-navigation';
+        var HOVER_CLASS = 'k-state-hover';
+        var FOCUSED_CLASS = 'k-state-focused';
+        var SELECTED_CLASS = 'k-state-selected';
+        var HINT_CLASS = 'kj-hint';
+        var DATA_UID = kendo.attr('uid');
+        var ALL_ITEMS_SELECTOR = 'div.kj-item[' + DATA_UID + ']';
+        var ITEM_BYUID_SELECTOR = 'div.kj-item[' + DATA_UID + '="{0}"]';
+        var ARIA_SELECTED = 'aria-selected';
 
         /*********************************************************************************
          * Helpers
          *********************************************************************************/
-
-        function log(message) {
-            if (window.app && window.app.DEBUG && window.console && $.isFunction(window.console.log)) {
-                window.console.log('kidoju.widgets.navigation: ' + message);
-            }
-        }
 
         function isGuid(value) {
             // See http://stackoverflow.com/questions/7905929/how-to-test-valid-uuid-guid
@@ -83,12 +86,14 @@
                 var that = this;
                 // base call to widget initialization
                 Widget.fn.init.call(this, element, options);
+                logger.debug('widget initialized');
+                // By default, no page is selected
+                that._selectedUid = NULL;
                 that._templates();
                 that._layout();
                 that._addSorting();
                 that._dataSource();
                 // that.refresh();
-                log('widget initialized');
             },
 
             /**
@@ -132,23 +137,27 @@
              * @returns {*}
              */
             index: function (index) {
-                var that = this, page;
-                if (index !== undefined) {
-                    if ($.type(index) !== NUMBER || index % 1 !== 0) {
-                        throw new TypeError();
-                    } else if (index < 0 || (index > 0 && index >= that.length())) {
+                var that = this;
+                var page;
+                if ($.type(index) === NUMBER) {
+                    if ((index % 1 !== 0) || (index < 0) || (index > 0 && index >= that.length())) {
                         throw new RangeError();
-                    } else {
-                        page = that.dataSource.at(index);
-                        that.value(page);
                     }
-                } else {
+                    page = that.dataSource.at(index);
+                    if (page instanceof Page) {
+                        that.value(page);
+                    } else {
+                        that.value(NULL);
+                    }
+                } else if ($.type(index) === UNDEFINED) {
                     page = that.dataSource.getByUid(that._selectedUid);
-                    if (page instanceof kidoju.Page) {
+                    if (page instanceof Page) {
                         return that.dataSource.indexOf(page);
                     } else {
                         return -1;
                     }
+                } else {
+                    throw new TypeError();
                 }
             },
 
@@ -159,76 +168,71 @@
              * @returns {*}
              */
             id: function (id) {
-                var that = this, page;
-                if (id !== undefined) {
-                    if ($.type(id) !== STRING && $.type(id) !== NUMBER) {
-                        throw new TypeError();
-                    }
+                var that = this;
+                var page;
+                if ($.type(id) === STRING || $.type(id) === NUMBER) {
                     page = that.dataSource.get(id);
-                    that.value(page);
-                } else {
+                    if (page instanceof Page) {
+                        that.value(page);
+                    } else {
+                        that.value(NULL);
+                    }
+                } else if ($.type(id) === UNDEFINED) {
                     page = that.dataSource.getByUid(that._selectedUid);
-                    if (page instanceof kidoju.Page) {
+                    if (page instanceof Page) {
                         return page[page.idField];
                     }
+                } else {
+                    throw new TypeError();
                 }
             },
 
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
+
             /**
              * Gets/Sets the value of the selected page in the navigation
+             * Set to NULL to unselect a page (state where no page is selected)
+             *
              * @method value
              * @param page
              * @returns {*}
              */
             value: function (page) {
                 var that = this;
-                if (page === NULL) {
-                    if (that._selectedUid !== NULL) {
+                if (page === NULL || page instanceof Page) {
+                    var hasChanged = false;
+                    if (page === NULL && that._selectedUid !== NULL) {
+                        hasChanged = true;
                         that._selectedUid = NULL;
-                        log('selected page uid set to null');
+                    } else if (page instanceof Page && that._selectedUid !== page.uid && that.dataSource.indexOf(page) > -1) {
+                        hasChanged = true;
+                        that._selectedUid = page.uid;
+                    }
+                    if (hasChanged) {
+                        logger.debug('selected page uid set to ' + that._selectedUid);
                         that._toggleSelection();
-                        that.trigger(CHANGE, {
-                            index: undefined,
-                            value: page
-                        });
+                        that.trigger(CHANGE, { value: page });
                     }
-                } else if (page !== undefined) {
-                    if (!(page instanceof kidoju.Page)) {
-                        throw new TypeError();
-                    }
-                    // Note: when that.value() was previously named that.selection() with a custom binding
-                    // the selection binding was executed before the source binding so we had to record the selected page
-                    // in a temp variable (that._tmp) and assign it to the _selectedUid in the refresh method,
-                    // that is after the source was bound.
-                    // The corresponding code has now been removed after renaming that.selection() into that.value()
-                    // because the value binding is executed after the source binding.
-                    if (page.uid !== that._selectedUid && isGuid(page.uid)) {
-                        var index = that.dataSource.indexOf(page);
-                        if (index > -1) {
-                            that._selectedUid = page.uid;
-                            log('selected page uid set to ' + page.uid);
-                            that._toggleSelection();
-                            that.trigger(CHANGE, {
-                                index: index,
-                                value: page
-                            });
-                        }
-                    }
-                } else {
+                } else if ($.type(page) === UNDEFINED) {
                     if (that._selectedUid === NULL) {
                         return NULL;
                     } else {
-                        return that.dataSource.getByUid(that._selectedUid); // This returns undefined if not found
+                        return that.dataSource.getByUid(that._selectedUid) || NULL; // getByUid returns undefined if not found
                     }
+                } else {
+                    throw new TypeError();
                 }
             },
+
+            /* jshint +W074 */
 
             /**
              * @method total()
              * @returns {*}
              */
             length: function () {
-                return (this.dataSource instanceof kidoju.PageCollectionDataSource) ? this.dataSource.total() : -1;
+                return (this.dataSource instanceof PageCollectionDataSource) ? this.dataSource.total() : -1;
             },
 
             /**
@@ -319,14 +323,15 @@
                 // we need to rebuild the DataSource
 
                 // There is no reason why, in its current state, it would not work with any dataSource
-                // if ( that.dataSource instanceof data.DataSource && that._refreshHandler ) {
-                if (that.dataSource instanceof kidoju.PageCollectionDataSource && that._refreshHandler) {
+                // if ( that.dataSource instanceof DataSource && that._refreshHandler ) {
+                if (that.dataSource instanceof PageCollectionDataSource && that._refreshHandler) {
                     that.dataSource.unbind(CHANGE, that._refreshHandler);
                 }
 
                 if (that.options.dataSource !== NULL) {  // use null to explicitely destroy the dataSource bindings
+
                     // returns the datasource OR creates one if using array or configuration object
-                    that.dataSource = kidoju.PageCollectionDataSource.create(that.options.dataSource);
+                    that.dataSource = PageCollectionDataSource.create(that.options.dataSource);
 
                     that._refreshHandler = $.proxy(that.refresh, that);
 
@@ -378,18 +383,18 @@
             /**
              * Add a navigation item containing a stage(page) wrapped in a div
              * @param page
-             * @param index // TODO with sorting -----------------------------------------------------------------------
+             * @param index
              * @private
              */
             _addItem: function (page, index) {
-                var that = this,
-                    navigation = that.element;
+                var that = this;
+                var navigation = that.element;
 
                 // Check that we get a page that is not already in navigation
-                if (page instanceof kidoju.Page && navigation.find(kendo.format(ITEM_BYUID_SELECTOR, page.uid)).length === 0) {
+                if (page instanceof Page && navigation.find(kendo.format(ITEM_BYUID_SELECTOR, page.uid)).length === 0) {
 
                     // Create navigation item (actually a selection frame around the thumbnail stage)
-                    var navigationItem = $(that._itemTemplate({uid: page.uid, ns: kendo.ns}))
+                    var navigationItem = $(that._itemTemplate({ uid: page.uid, ns: kendo.ns }))
                         .css({
                             boxSizing: 'border-box',
                             position: 'relative',
@@ -397,12 +402,8 @@
                             margin: parseInt(that.options.pageSpacing, 10) - parseInt(that.options.selectionBorder, 10)
                         });
 
-                    // append the menu icon // TODO<------------------------------------------------------------ icon
-                    // Top left should be determined by that.options.selectionBorder
-                    navigationItem.append('<div style="position:absolute; top: 10px; left: 10px; height: 20px; width: 20px; background-color: black;"></div>');
-
                     // Add to navigation
-                    navigation.append(navigationItem); // TODO <----------------------------------------------------- index
+                    navigation.append(navigationItem);
 
                     // Make the stage and bind to components
                     navigationItem.find(kendo.roleSelector('stage')).kendoStage({
@@ -427,22 +428,24 @@
                 item.off().remove();
             },
 
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
+
             /**
              * Refreshes the widget when dataSource changes
              * @param e
              */
             refresh: function (e) {
                 var that = this;
-
+                var selectedIndex = that.index();
                 if (e && e.action === undefined) {
                     that.trigger(DATABINDING);
                 }
-
                 if (e === undefined || e.action === undefined) {
                     var pages = [];
-                    if (e === undefined && that.dataSource instanceof kidoju.PageCollectionDataSource) {
+                    if (e === undefined && that.dataSource instanceof PageCollectionDataSource) {
                         pages = that.dataSource.data();
-                    } else if (e && e.items instanceof kendo.data.ObservableArray) {
+                    } else if (e && e.items instanceof ObservableArray) {
                         pages = e.items;
                     }
                     $.each(that.element.find(ALL_ITEMS_SELECTOR), function (index, item) {
@@ -453,28 +456,36 @@
                     });
                 } else if (e.action === 'add' && $.isArray(e.items) && e.items.length) {
                     $.each(e.items, function (index, page) {
+                        // TODO: Consider inserting the page at index + 1
                         that._addItem(page);
-                        that.trigger(CHANGE, {action: e.action, value: page}); // TODO <--------------------------------------------
                     });
-                    // that.select(e.items[e.items.length -1]); // TODO <---------------------------------------------
+                    selectedIndex = that.dataSource.indexOf(e.items[e.items.length - 1]);
                 } else if (e.action === 'remove' && $.isArray(e.items) && e.items.length) {
                     $.each(e.items, function (index, page) {
                         that._removeItemByUid(page.uid);
-                        that.trigger(CHANGE, {action: e.action, value: page});
-                        // that._selectByUid(null); // TODO
                     });
-
+                    selectedIndex = e.index || -1;
                 } else if (e.action === 'itemchange') {
-                    $.noop(); // TODO
+                    return;
                 }
-
-                that._toggleSelection();
+                var total = that.dataSource.total();
+                if (total > 0 && selectedIndex > -1 && selectedIndex < total) {
+                    that.index(selectedIndex);
+                } else if (total > 0 && selectedIndex <= -1) {
+                    that.index(0);
+                } else if (total > 0 && selectedIndex >= total) {
+                    that.index(total - 1);
+                } else {
+                    that.value(null);
+                }
+                // that._toggleSelection();
                 that.resize();
-
                 if (e && e.action === undefined) {
                     that.trigger(DATABOUND);
                 }
             },
+
+            /* jshint +W074 */
 
             /**
              * Adds the k-state-selected class to the selected page determined by that._selectedUid
@@ -509,9 +520,9 @@
              * @method resize
              */
             resize: function () {
-                var that = this,
-                    navigation = that.element,
-                    scale = that._getStageScale();
+                var that = this;
+                var navigation = that.element;
+                var scale = that._getStageScale();
 
                 // TODO: we are not clear with borders here
                 // we actually need the widget's outerWidth and outerHeight
@@ -559,8 +570,8 @@
             _click: function (e) {
                 if (e instanceof $.Event) {
                     e.preventDefault();
-                    var target = $(e.currentTarget),
-                        navigation = target.closest(kendo.roleSelector('navigation'));
+                    var target = $(e.currentTarget);
+                    var navigation = target.closest(kendo.roleSelector('navigation'));
                     if (!target.is('.' + SELECTED_CLASS)) {
                         var page = this.dataSource.getByUid(target.attr(kendo.attr('uid')));
                         this.value(page);
@@ -600,6 +611,8 @@
         kendo.ui.plugin(Navigation);
 
     }(window.jQuery));
+
+    /* jshint +W071 */
 
     return window.kendo;
 

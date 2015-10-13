@@ -8,39 +8,48 @@
 
 (function (f, define) {
     'use strict';
-    define(['./vendor/kendo/kendo.binder', './kidoju.data'], f);
+    define([
+        './vendor/kendo/kendo.binder',
+        './kidoju.data'
+        // './window.assert',
+        // './window.log'
+    ], f);
 })(function () {
 
     'use strict';
 
+    /* This function has too many statements. */
+    /* jshint -W071 */
+
     (function ($, undefined) {
 
-        var kendo = window.kendo,
-            kidoju = window.kidoju = window.kidoju || {},
-
-        // Types
-            OBJECT = 'object',
-            STRING = 'string',
-            NUMBER = 'number',
-            BOOLEAN = 'boolean',
-            DATE = 'date',
-
-        // Tools
-            CURSOR_DEFAULT = 'default',
-            CURSOR_CROSSHAIR = 'crosshair',
-            REGISTER = 'register',
-            ACTIVE = 'active',
-            POINTER = 'pointer',
-
-        // HTML
-            ELEMENT_CLASS = '.kj-element',
-        // POSITION = 'position',
-            ABSOLUTE = 'absolute',
-            DIALOG_DIV = '<div class="k-popup-edit-form {0}"></div>',
-            DIALOG_CLASS = '.kj-dialog',
-
-        // Event
-            CLICK = 'click';
+        var kendo = window.kendo;
+        var kidoju = window.kidoju = window.kidoju || {};
+        var Model = kidoju.data.Model;
+        var PageComponent = kidoju.data.PageComponent;
+        // var assert = window.assert,
+        // var logger = new window.Log('kidoju.tools'); // TODO
+        var OBJECT = 'object';
+        var STRING = 'string';
+        var NUMBER = 'number';
+        var BOOLEAN = 'boolean';
+        var DATE = 'date';
+        var CURSOR_DEFAULT = 'default';
+        var CURSOR_CROSSHAIR = 'crosshair';
+        var REGISTER = 'register';
+        var ACTIVE = 'active';
+        var POINTER = 'pointer';
+        var ELEMENT_CLASS = '.kj-element';
+        var AUTO = 'auto';
+        var DIALOG_DIV = '<div class="k-popup-edit-form {0}"></div>';
+        var DIALOG_CLASS = '.kj-dialog';
+        var CLICK = 'click';
+        var FORMULA = 'function validate(value, solution, all) {\n\t{0}\n}';
+        var JS_COMMENT = '// ';
+        var CUSTOM = {
+                name: 'custom',
+                formula: kendo.format(FORMULA, '// Your code should return true when value is validated against solution.')
+            };
 
         /*********************************************************************************
          * Culture
@@ -52,10 +61,18 @@
          * Helpers
          *********************************************************************************/
 
-        function log(message) {
-            if (window.app && window.app.DEBUG && window.console && $.isFunction(window.console.log)) {
-                window.console.log('kidoju.tools: ' + message);
-            }
+        /**
+         * Build a random hex string of length characters
+         * @param length
+         * @returns {string}
+         */
+        function randomString(length) {
+            var s = new Array(length + 1).join('x');
+            return s.replace(/x/g, function (c) {
+                /* jshint -W016 */
+                return (Math.random() * 16|0).toString(16);
+                /* jshint +W016 */
+            });
         }
 
         /*********************************************************************************
@@ -66,10 +83,10 @@
          * Registry of tools
          * @type {{register: Function}}
          */
-        kidoju.tools = kendo.observable({
+        var tools = kidoju.tools = kendo.observable({
             active: null,
             register: function (Class) {
-                // if(Class instanceof constructor) {
+                // if (Class instanceof constructor) {
                 if ($.type(Class.fn) === OBJECT) {
                     var obj = new Class();
                     if (obj instanceof Tool && $.type(obj.id) === STRING) {
@@ -103,36 +120,26 @@
              * @param options
              */
             init: function (options) {
-                if ($.type(options) === OBJECT) {
-                    if ($.type(options.id) === STRING) {
-                        this.id = options.id;
-                    }
-                    if ($.type(options.icon) === STRING) {
-                        this.icon = options.icon;
-                    }
-                    // if ($.type(options.name) === STRING) {
-                    //    this.name = options.name;
-                    // }
-                    if ($.type(options.cursor) === STRING) {
-                        this.cursor = options.cursor;
-                    }
-                    if ($.type(options.height) === NUMBER) {
-                        this.height = options.height;
-                    }
-                    if ($.type(options.width) === NUMBER) {
-                        this.width = options.width;
-                    }
+
+                // Extend tool with init options
+                $.extend(this, options);
+
+                // Pass solution adapter library to validation adapter, especially for the code editor
+                if (this.properties && this.properties.solution instanceof adapters.BaseAdapter && this.properties.validation instanceof adapters.ValidationAdapter) {
+                    this.properties.validation.library = this.properties.solution.library;
+                    this.properties.validation.defaultValue = JS_COMMENT + this.properties.solution.libraryDefault;
                 }
+
             },
 
             /**
-             * Get a kendo.data.Model for attributes
+             * Get a kidoju.data.Model for attributes
              * @method _getAttributeModel
-             * @returns {kendo.data.Model}
+             * @returns {kidoju.data.Model}
              * @private
              */
             _getAttributeModel: function () {
-                var model = {fields: {}};
+                var model = { fields: {} };
                 for (var attr in this.attributes) {
                     if (this.attributes.hasOwnProperty(attr)) {
                         if (this.attributes[attr] instanceof adapters.BaseAdapter) {
@@ -140,12 +147,13 @@
                         }
                     }
                 }
-                return kendo.data.Model.define(model);
+                return Model.define(model);
             },
 
             /**
              * Gets property grid row specifications for attributes
-             * @returns {Array}
+             * @method _getAttributeRows
+             * @returns {kArray}
              * @private
              */
             _getAttributeRows: function () {
@@ -171,25 +179,29 @@
             },
 
             /**
-             * Get a kendo.data.Model for properties
+             * Get a kidoju.data.Model for properties
              * @method _getPropertyModel
-             * @returns {kendo.data.Model}
+             * @returns {kidoju.data.Model}
              * @private
              */
             _getPropertyModel: function () {
-                var model = {fields: {}};
-                for (var prop in this.properties) {
-                    if (this.properties.hasOwnProperty(prop)) {
-                        if (this.properties[prop] instanceof adapters.BaseAdapter) {
-                            model.fields[prop] = this.properties[prop].getField();
+                var properties = this.properties;
+                var model = { fields: {} };
+                for (var prop in properties) {
+                    if (properties.hasOwnProperty(prop)) {
+                        if (properties[prop] instanceof adapters.BaseAdapter) {
+                            model.fields[prop] = properties[prop].getField();
                             if (prop === 'name') {
-                                // Add a property field name
-                                model.fields[prop].defaultValue = 'val_' + Math.floor((1 + Math.random()) * 0x1000000).toString(16).substring(1);
+                                // This cannot be set as a default value on the  adapter because each instance should have a different name
+                                model.fields.name.defaultValue = 'val_' + randomString(4);
+                            } else if (prop === 'validation') {
+                                // We need the code library otherwise we won't have code to execute when validation === '// equal' or any other library value
+                                model._library = properties.validation.library;
                             }
                         }
                     }
                 }
-                return kendo.data.Model.define(model);
+                return Model.define(model);
             },
 
             /**
@@ -218,6 +230,9 @@
                 throw new Error('Please implement in subclassed tool.');
             }
 
+            // addEvents(mode)
+            // removeEvents(mode)
+
             // onMove(e.component)
             // onResize(e.component)
             // onRotate(e.component)
@@ -229,6 +244,9 @@
          *******************************************************************************************/
         var adapters = kidoju.adapters = {};
 
+        /**
+         * Base (abstract) adapter
+         */
         adapters.BaseAdapter = kendo.Class.extend({
 
             /**
@@ -263,6 +281,32 @@
             },
 
             /**
+             * Get a dialog window
+             */
+            getDialog: function () {
+                var that = this;
+                var dialog = $(DIALOG_CLASS).data('kendoWindow');
+                // Find or create dialog frame
+                if (!(dialog instanceof kendo.ui.Window)) {
+                    // Create dialog
+                    dialog = $(kendo.format(DIALOG_DIV, DIALOG_CLASS.substr(1)))
+                        .appendTo(document.body)
+                        .kendoWindow({
+                            actions: ['close'],
+                            modal: true,
+                            resizable: false,
+                            visible: false,
+                            width: 860
+                        })
+                        .data('kendoWindow');
+                }
+                return dialog;
+            },
+
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
+
+            /**
              * Get a kendo.data.Model field
              * See http://docs.telerik.com/kendo-ui/api/javascript/data/model#methods-Model.define
              * @returns {{}}
@@ -293,6 +337,11 @@
                 }
                 return field;
             },
+
+            /* jshint +W074 */
+
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
 
             /**
              * Get a property grid row
@@ -328,6 +377,8 @@
 
         });
 
+        /* jshint +W074 */
+
         /**
          * String adapter
          */
@@ -337,8 +388,30 @@
                 this.type = STRING;
                 this.defaultValue = this.defaultValue || (this.nullable ? null : '');
                 this.editor = 'input';
-                this.attributes = $.extend({}, this.attributes, {type: 'text', class: 'k-textbox'});
-            }
+                this.attributes = $.extend({}, this.attributes, { type: 'text', class: 'k-textbox' });
+            },
+            library: [
+                // TODO: provide a Soundex and doubleMetaphone function to web worker
+                // See https://github.com/hgoebl/doublemetaphone
+                // See https://github.com/NaturalNode/natural
+                {
+                    name: 'equal',
+                    formula: kendo.format(FORMULA, 'return String(value).trim() === String(solution).trim();')
+                },
+                {
+                    name: 'ignoreCaseEqual',
+                    formula: kendo.format(FORMULA, 'return String(value).trim().toUpperCase() === String(solution).trim().toUpperCase();')
+                },
+                {
+                    name: 'ignoreCaseMatch',
+                    formula: kendo.format(FORMULA, 'return (new RegExp(\'^\' + String(solution) + \'$\', \'i\')).test(String(value));')
+                },
+                {
+                    name: 'match',
+                    formula: kendo.format(FORMULA, 'return (new RegExp(\'^\' + String(solution) + \'$\')).test(String(value));')
+                }
+            ],
+            libraryDefault: 'equal'
         });
 
         /**
@@ -352,7 +425,31 @@
                 this.editor = 'input';
                 this.attributes = $.extend({}, this.attributes);
                 this.attributes[kendo.attr('role')] = 'numerictextbox';
-            }
+            },
+            library: [
+                {
+                    name: 'equal',
+                    // TODO: parsing raises a culture issue with 5.3 in english and 5,3 in french
+                    formula: kendo.format(FORMULA, 'return Number(value) === Number(solution);')
+                },
+                {
+                    name: 'greaterThan',
+                    formula: kendo.format(FORMULA, 'return Number(value) > Number(solution);')
+                },
+                {
+                    name: 'greaterThanOrEqual',
+                    formula: kendo.format(FORMULA, 'return Number(value) >= Number(solution);')
+                },
+                {
+                    name: 'lowerThan',
+                    formula: kendo.format(FORMULA, 'return Number(value) < Number(solution);')
+                },
+                {
+                    name: 'lowerThanOrEqual',
+                    formula: kendo.format(FORMULA, 'return Number(value) <= Number(solution);')
+                }
+            ],
+            libraryDefault: 'equal'
         });
 
         /**
@@ -366,7 +463,14 @@
                 this.editor = 'input';
                 this.attributes = $.extend({}, this.attributes);
                 this.attributes[kendo.attr('role')] = 'switch';
-            }
+            },
+            library: [
+                {
+                    name: 'equal',
+                    formula: kendo.format(FORMULA, 'return String(value).toLowerCase() === String(solution).toLowerCase();')
+                }
+            ],
+            libraryDefault: 'equal'
         });
 
         /**
@@ -380,6 +484,39 @@
                 this.editor = 'input';
                 this.attributes = $.extend({}, this.attributes);
                 this.attributes[kendo.attr('role')] = 'datepicker';
+            },
+            library: [
+                {
+                    name: 'equal',
+                    // TODO: parsing raises a culture issue with MM/DD/YYYY in english and DD/MM/YYYY in french
+                    // Note: new Date(1994,1,1) !== new Date(1994,1,1) as they are two different objects
+                    formula: kendo.format(FORMULA, 'return new Date(value) - new Date(solution) === 0;')
+                }
+            ],
+            libraryDefault: 'equal'
+        });
+
+        /**
+         * Text (multiline) adapter
+         */
+        adapters.TextAdapter = adapters.StringAdapter.extend({
+            init: function (options) {
+                adapters.StringAdapter.fn.init.call(this, options);
+                this.editor = 'textarea';
+                this.attributes = $.extend({}, this.attributes, { rows: 4, style: 'resize:vertical; width: 100%;' });
+            }
+        });
+
+        /**
+         * Enum adapter
+         */
+        adapters.EnumAdapter = adapters.StringAdapter.extend({
+            init: function (options) {
+                adapters.StringAdapter.fn.init.call(this, options);
+                this.editor = 'input';
+                this.attributes = $.extend({}, this.attributes, { style: 'width: 100%;' });
+                this.attributes[kendo.attr('role')] = 'dropdownlist';
+                this.attributes[kendo.attr('source')] = JSON.stringify(options.enum); // kendo.htmlEncode??
             }
         });
 
@@ -392,22 +529,23 @@
                 adapters.BaseAdapter.fn.init.call(that, options);
                 that.type = STRING;
                 that.defaultValue = that.defaultValue || (that.nullable ? null : '');
+                // This is the inline editor with a [...] button which triggers this.showDialog
                 that.editor = function (container, options) {
-                    var div = $('<div/>')
-                        .css({display: 'table'})
+                    var table = $('<div/>')
+                        .css({ display: 'table' })
                         .appendTo(container);
-                    var span = $('<span/>')
+                    var cell = $('<div/>')
                         .css({
                             display: 'table-cell',
                             width: '100%',
                             paddingRight: '8px'
                         })
-                        .appendTo(div);
+                        .appendTo(table);
                     var input = $('<input/>')
                         .addClass('k-textbox') // or k-input
-                        .css({width: '100%'})
-                        .attr($.extend({}, options.attributes, {'data-bind': 'value: ' + options.field}))
-                        .appendTo(span);
+                        .css({ width: '100%' })
+                        .attr($.extend({}, options.attributes, { 'data-bind': 'value: ' + options.field }))
+                        .appendTo(cell);
                     $('<button/>')
                         .text('...')
                         .addClass('k-button')
@@ -417,50 +555,224 @@
                             height: input.css('height'), // to match input,
                             margin: 0
                         })
-                        .appendTo(div)
+                        .appendTo(table)
                         .on(CLICK, $.proxy(that.showDialog, that, options));
                 };
             },
             showDialog: function (options) {
-                var that = this,
-                    dialog = $(DIALOG_CLASS).data('kendoWindow');
-                if (!(dialog instanceof kendo.ui.Window)) {
-                    // Create dialog
-                    dialog = $(kendo.format(DIALOG_DIV, DIALOG_CLASS.substr(1)))
-                        .appendTo(document.body)
-                        .kendoWindow({
-                            actions: ['close'],
-                            modal: true,
-                            resizable: false,
-                            visible: false
-                        })
-                        .data('kendoWindow');
-                    dialog.element.on(CLICK, '.k-button', $.proxy(that.closeDialog, that, options, dialog));
-                }
-                // Prepare dialog (the content method destroys widgets and unbinds data)
+                var that = this;
+                var dialog = that.getDialog();
+                // Create viewModel (Cancel shall not save changes to main model)
+                dialog.viewModel = kendo.observable({
+                    style: options.model.get(options.field)
+                });
+                // Prepare UI
                 dialog.title(options.title);
-                var content = '<div class="k-edit-form-container kj-style-edit-form">' +
-                    '<div class="k-edit-label"><label for="title">Title</label></div><div data-container-for="title" class="k-edit-field"><input type="text" class="k-input k-textbox" name="title" data-bind="value:title"></div>' +
-                    '<div class="k-edit-label"><label for="start">Start</label></div><div data-container-for="start" class="k-edit-field"><span class="k-widget k-datetimepicker k-header"><span class="k-picker-wrap k-state-default"><input type="text" required="" data-type="date" data-role="datetimepicker" data-bind="value:start" data-validate="true" name="start" data-datecompare-msg="Start date should be before or equal to the end date" class="k-input" role="combobox" aria-expanded="false" aria-disabled="false" aria-readonly="false" style="width: 100%;"><span unselectable="on" class="k-select"><span unselectable="on" class="k-icon k-i-calendar" role="button">select</span><span unselectable="on" class="k-icon k-i-clock" role="button">select</span></span></span></span><span data-for="start" class="k-invalid-msg" style="display: none;"></span></div>' +
-                    '<div class="k-edit-label"><label for="end">End</label></div><div data-container-for="end" class="k-edit-field"><span class="k-widget k-datetimepicker k-header"><span class="k-picker-wrap k-state-default"><input type="text" required="" data-type="date" data-role="datetimepicker" data-bind="value:end" data-validate="true" name="end" data-datecompare-msg="End date should be after or equal to the start date" class="k-input" role="combobox" aria-expanded="false" aria-disabled="false" aria-readonly="false" style="width: 100%;"><span unselectable="on" class="k-select"><span unselectable="on" class="k-icon k-i-calendar" role="button">select</span><span unselectable="on" class="k-icon k-i-clock" role="button">select</span></span></span></span><span data-for="end" class="k-invalid-msg" style="display: none;"></span></div>' +
-                    '<div class="k-edit-label"><label for="percentComplete">Complete</label></div><div data-container-for="percentComplete" class="k-edit-field"><span class="k-widget k-numerictextbox"><span class="k-numeric-wrap k-state-default"><input type="text" class="k-formatted-value k-input" tabindex="0" aria-disabled="false" aria-readonly="false" style="display: inline-block;"><input type="text" name="percentComplete" required="required" min="0" max="1" step="0.01" data-type="number" data-bind="value:percentComplete" data-role="numerictextbox" role="spinbutton" class="k-input" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0" aria-disabled="false" aria-readonly="false" style="display: none;"><span class="k-select"><span unselectable="on" class="k-link"><span unselectable="on" class="k-icon k-i-arrow-n" title="Increase value">Increase value</span></span><span unselectable="on" class="k-link"><span unselectable="on" class="k-icon k-i-arrow-s" title="Decrease value">Decrease value</span></span></span></span></span><span data-for="percentComplete" class="k-invalid-msg" style="display: none;"></span></div>' +
-                    '<div class="k-edit-label"><label for="resources">Resources</label></div><div class="k-gantt-resources" style="display:none"></div><div data-container-for="resources" class="k-edit-field"><a href="#" class="k-button">Assign</a></div>' +
-
-                    '<div class="k-edit-buttons k-state-default"><a class="k-primary k-button" data-command="save" href="#">Save</a><a class="k-button" data-command="cancel" href="#">Cancel</a></div>' +
+                var content = '<div class="k-edit-form-container">' +
+                    '<div data-role="styleeditor" data-bind="value: style"></div>' +
+                    '<div class="k-edit-buttons k-state-default"><a class="k-primary k-button" data-command="ok" href="#">OK</a><a class="k-button" data-command="cancel" href="#">Cancel</a></div>' +
                     '</div>';
                 dialog.content(content);
+                kendo.bind(dialog.element, dialog.viewModel);
+                dialog.element.addClass('kj-no-padding');
+                // Bind click handler for edit buttons
+                dialog.element.on(CLICK, '.k-edit-buttons>.k-button', $.proxy(that.closeDialog, that, options, dialog));
                 // Show dialog
                 dialog.center().open();
             },
             closeDialog: function (options, dialog, e) {
                 var that = this;
-                if (e instanceof $.Event && $(e.target) instanceof $) {
+                if (e instanceof $.Event && e.target instanceof window.HTMLElement) {
                     var command = $(e.target).attr(kendo.attr('command'));
-                    if (command === 'save') {
-                        $.noop();
+                    if (command === 'ok') {
+                        options.model.set(options.field, dialog.viewModel.get('style'));
                     }
-                    dialog.close();
-                    dialog.content('');
+                    if (command === 'ok' || command === 'cancel') {
+                        dialog.close();
+                        dialog.element.off(CLICK, '.k-edit-buttons>.k-button');
+                        dialog.element.removeClass('kj-no-padding');
+                        // The content method destroys widgets and unbinds data
+                        dialog.content('');
+                        dialog.viewModel = undefined;
+                    }
+                }
+            }
+        });
+
+        /**
+         * Asset Adapter
+         */
+        adapters.AssetAdapter = adapters.BaseAdapter.extend({
+            init: function (options) {
+                var that = this;
+                adapters.BaseAdapter.fn.init.call(that, options);
+                that.type = STRING;
+                that.defaultValue = that.defaultValue || (that.nullable ? null : '');
+                // This is the inline editor with a [...] button which triggers this.showDialog
+                that.editor = function (container, options) {
+                    var table = $('<div/>')
+                        .css({ display: 'table' })
+                        .appendTo(container);
+                    var cell = $('<div/>')
+                        .css({
+                            display: 'table-cell',
+                            width: '100%',
+                            paddingRight: '8px'
+                        })
+                        .appendTo(table);
+                    var input = $('<input/>')
+                        .addClass('k-textbox') // or k-input
+                        .css({ width: '100%' })
+                        .attr($.extend({}, options.attributes, { 'data-bind': 'value: ' + options.field }))
+                        .appendTo(cell);
+                    $('<button/>')
+                        .text('...')
+                        .addClass('k-button')
+                        .css({
+                            display: 'table-cell',
+                            minWidth: '40px',
+                            height: input.css('height'), // to match input,
+                            margin: 0
+                        })
+                        .appendTo(table)
+                        .on(CLICK, $.proxy(that.showDialog, that, options));
+                };
+            },
+            showDialog: function (options) {
+                var that = this;
+                var dialog = that.getDialog();
+                // Create viewModel (Cancel shall not save changes to main model)
+                dialog.viewModel = kendo.observable({
+                    url: options.model.get(options.field)
+                });
+                // Prepare UI
+                dialog.title(options.title);
+                var content = '<div class="k-edit-form-container">' +
+                    '<div data-role="assetmanager" data-bind="value: url"></div>' +
+                    '<div class="k-edit-buttons k-state-default"><a class="k-primary k-button" data-command="ok" href="#">OK</a><a class="k-button" data-command="cancel" href="#">Cancel</a></div>' +
+                    '</div>';
+                dialog.content(content);
+                dialog.element.find(kendo.roleSelector('assetmanager')).kendoAssetManager({
+                    // change: function (e) {
+                    //     dialog.viewModel.set('url', e.sender.value());
+                    // },
+                    transport: {
+                        read: function (options) {
+                            options.success({
+                                total: 1,
+                                data: [
+                                    { url: 'https://s3-eu-west-1.amazonaws.com/kidoju.test/s/en/55c9c75dcc8974a01a397472/item204.jpg', size: 3177 }
+                                ]
+                            });
+                        },
+                        create: function (options) {
+
+                        },
+                        destroy: function (options) {
+
+                        }
+                        // update is same as create
+                    },
+                    collections: [
+                        {
+                            name: 'G-Collection',
+                            transport: {
+                                read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/g_collection/svg/all/index.json'
+                            }
+                        },
+                        {
+                            name: 'O-Collection',
+                            collections: [
+                                {
+                                    name: 'Dark Grey',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/o_collection/svg/dark_grey/index.json'
+                                    }
+                                },
+                                {
+                                    name: 'Office',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/o_collection/svg/office/index.json'
+                                    }
+                                },
+                                {
+                                    name: 'White',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/o_collection/svg/white/index.json'
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            name: 'V-Collection',
+                            collections: [
+                                {
+                                    name: 'Small',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/32x32/index.json'
+                                    }
+                                },
+                                {
+                                    name: 'Medium',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/64x64/index.json'
+                                    }
+                                },
+                                {
+                                    name: 'Large',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/128x128/index.json'
+                                    }
+                                },
+                                {
+                                    name: 'Huge',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/256x256/index.json'
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            name: 'X-Collection',
+                            collections: [
+                                {
+                                    name: 'Small',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/x_collection/png/32x32/index.json'
+                                    }
+                                },
+                                {
+                                    name: 'Large',
+                                    transport: {
+                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/x_collection/png/128x128/index.json'
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                });
+                kendo.bind(dialog.element, dialog.viewModel);
+                dialog.element.addClass('kj-no-padding');
+                // Bind click handler for edit buttons
+                dialog.element.on(CLICK, '.k-edit-buttons>.k-button', $.proxy(that.closeDialog, that, options, dialog));
+                // Show dialog
+                dialog.center().open();
+            },
+            closeDialog: function (options, dialog, e) {
+                var that = this;
+                if (e instanceof $.Event && e.target instanceof window.HTMLElement) {
+                    var command = $(e.target).attr(kendo.attr('command'));
+                    if (command === 'ok') {
+                        options.model.set(options.field, dialog.viewModel.get('url'));
+                    }
+                    if (command === 'ok' || command === 'cancel') {
+                        dialog.close();
+                        dialog.element.off(CLICK, '.k-edit-buttons>.k-button');
+                        dialog.element.removeClass('kj-no-padding');
+                        // The content method destroys widgets and unbinds data
+                        dialog.content('');
+                        dialog.viewModel = undefined;
+                    }
                 }
             }
         });
@@ -478,168 +790,90 @@
                 var that = this;
                 adapters.BaseAdapter.fn.init.call(that, options);
                 that.type = STRING;
-                switch (options.solutionType) {
-                    case STRING:
-                    case NUMBER:
-                    case BOOLEAN:
-                    case DATE:
-                        that.defaultValue = that.validators[options.solutionType][0].formula;
-                        break;
-                    default:
-                        that.defaultValue = that.validators.default[0].formula;
-                }
                 that.editor = function (container, options) {
-                    var div = $('<div/>')
-                        .css({display: 'table'})
+                    var table = $('<div/>')
+                        .css({ display: 'table' })
                         .appendTo(container);
-                    var span = $('<span/>')
+                    var cell = $('<div/>')
                         .css({
                             display: 'table-cell',
                             width: '100%',
                             paddingRight: '8px'
                         })
-                        .appendTo(div);
-                    var input = $('<input/>')
-                        .addClass('k-textbox')
-                        .css({width: '100%'})
-                        .prop({readonly: true})
-                        // .attr($.extend({}, options.attributes, {'data-bind': 'value: ' + options.field}))
-                        // TODO: Display validator name
-                        .appendTo(span);
+                        .appendTo(table);
+                    var input = $('<div data-role="codeinput" />')
+                        // Note: _library is added to the data bound PageComponent in its init method
+                        .attr($.extend({}, options.attributes, { 'data-bind': 'value: ' + options.field + ', source: _library' }))
+                        .appendTo(cell);
+                    // We need a temporary textbox to calculate the height and align the button
+                    var temp = $('<input type="text" class="k-textbox">')
+                        .css({ visibility: 'hidden' })
+                        .appendTo(cell);
                     $('<button/>')
                         .text('...')
                         .addClass('k-button')
                         .css({
                             display: 'table-cell',
                             minWidth: '40px',
-                            height: input.css('height'), // to match input,
+                            height: temp.css('height'), // $('input.k-textbox').last().css('height'),
                             margin: 0
                         })
-                        .appendTo(div)
+                        .appendTo(table)
                         .on(CLICK, $.proxy(that.showDialog, that, options));
+                    temp.remove();
                 };
             },
             showDialog: function (options/*,evt*/) {
-                var that = this,
-                    dialog = $(DIALOG_CLASS).data('kendoWindow');
-                if (!(dialog instanceof kendo.ui.Window)) {
-                    // Create dialog
-                    dialog = $(kendo.format(DIALOG_DIV, DIALOG_CLASS.substr(1)))
-                        .appendTo(document.body)
-                        .kendoWindow({
-                            actions: ['close'],
-                            modal: true,
-                            resizable: false,
-                            visible: false
-                        })
-                        .data('kendoWindow');
-                    dialog.element.on(CLICK, '.k-button', $.proxy(that.closeDialog, that, options, dialog));
-                }
-                // Prepare dialog (the content method destroys widgets and unbinds data)
+                var that = this;
+                var dialog = that.getDialog();
+                // Create viewModel (Cancel shall not save changes to main model)
+                dialog.viewModel = kendo.observable({
+                    code: options.model.get(options.field),
+                    library: [CUSTOM].concat(that.library)
+                });
+                // Prepare UI
                 dialog.title(options.title);
-                var content = '<div class="k-edit-form-container kj-validation-edit-form">' +
-                        // TODO: Add test textbox and button + help + possibly a combo of predefined functions
-                        // '<div>' +
-                        //    '<div class="k-edit-label"><label for="title">Title</label></div>' +
-                        //    '<div data-container-for="title" class="k-edit-field"><input type="text" class="k-input k-textbox" name="title" data-bind="value:title"></div>' +
-                        // '</div>' +
-                    '<div class="kj-codemirror"></div>' +
-                        // Buttons
-                    '<div class="k-edit-buttons k-state-default"><a class="k-primary k-button" data-command="save" href="#">Save</a><a class="k-button" data-command="cancel" href="#">Cancel</a></div>' +
+                var content = '<div class="k-edit-form-container">' +
+                    '<div data-role="codeeditor" data-bind="value: code, source: library" data-default="' + that.defaultValue + '" data-solution="' + kendo.htmlEncode(JSON.stringify(options.model.get('properties.solution'))) + '"></div>' +
+                    '<div class="k-edit-buttons k-state-default"><a class="k-primary k-button" data-command="ok" href="#">OK</a><a class="k-button" data-command="cancel" href="#">Cancel</a></div>' +
                     '</div>';
                 dialog.content(content);
-                var div = dialog.element.find('.kj-codemirror').get(0);
-                if (div instanceof window.HTMLElement) {
-                    dialog.codemirror = window.CodeMirror(div, {
-                        gutters: ['CodeMirror-lint-markers'],
-                        lineNumbers: true,
-                        lint: true,
-                        mode: 'javascript',
-                        value: that.defaultValue
-                    });
-                    // Set actual validation formula
-                    dialog.codemirror.getDoc().setValue(options.model.properties.get('validation'));
-                    dialog.codemirror.on('beforeChange', function (cm, change) {
-                        if ((change.from.line === 0) || // prevent changing the first line
-                            (change.from.line === cm.display.renderedView.length - 1) || // prevent changing the last line
-                            (change.origin === '+delete' && change.to.line === cm.display.renderedView.length - 1)) { // prevent backspace on the last line or suppr on the previous line
-                            change.cancel();
-                        }
-                    });
-                    dialog.bind('activate', function () {
-                        // IMPORTANT, we need to refresh codemirror here
-                        // otherwise the open animation messes with CodeMirror calculations
-                        // and gutter and line numbers are displayed at the wrong coordinates
-                        dialog.codemirror.refresh();
-                        dialog.unbind('activate');
-                    });
-                    // open dialog
-                    dialog.center().open();
-
-                }
+                kendo.bind(dialog.element, dialog.viewModel);
+                dialog.element.addClass('kj-no-padding');
+                // Bind click handler for edit buttons
+                dialog.element.on(CLICK, '.k-edit-buttons>.k-button', $.proxy(that.closeDialog, that, options, dialog));
+                // Bind window activate handler
+                dialog.bind('activate', function () {
+                    // IMPORTANT, we need to refresh codemirror here
+                    // otherwise the open animation messes with CodeMirror calculations
+                    // and gutter and line numbers are displayed at the wrong coordinates
+                    var codeEditor = dialog.element
+                        .find('.kj-codeeditor')
+                        .data('kendoCodeEditor');
+                    if (codeEditor instanceof kendo.ui.CodeEditor && codeEditor.codeMirror && $.isFunction(codeEditor.codeMirror.refresh)) {
+                        codeEditor.codeMirror.refresh();
+                    }
+                    dialog.unbind('activate');
+                });
+                // Show dialog
+                dialog.center().open();
             },
             closeDialog: function (options, dialog, e) {
                 var that = this;
-                if (e instanceof $.Event && $(e.target) instanceof $) {
+                if (e instanceof $.Event && e.target instanceof window.HTMLElement) {
                     var command = $(e.target).attr(kendo.attr('command'));
-                    if (command === 'save') {
-                        options.model.properties.set('validation', dialog.codemirror.getDoc().getValue());
+                    if (command === 'ok') {
+                        options.model.set(options.field, dialog.viewModel.get('code'));
                     }
-                    dialog.close();
-                    // restore
-                    dialog.content('');
-                    dialog.codemirror = undefined;
+                    if (command === 'ok' || command === 'cancel') {
+                        dialog.close();
+                        dialog.element.off(CLICK, '.k-edit-buttons>.k-button');
+                        dialog.element.removeClass('kj-no-padding');
+                        // The content method destroys widgets and unbinds data
+                        dialog.content('');
+                        dialog.viewModel = undefined;
+                    }
                 }
-            },
-            prerequisites: {
-                string: '', // TODO
-                number: '',
-                boolean: '',
-                date: '',
-                default: '' // '' + func converts a function to a string including the code - see http://jsfiddle.net/VUZck/146/ and http://stackoverflow.com/questions/12807263/prevent-uglifyjs-from-renaming-certain-functions
-            },
-            validators: {
-                string: [
-                    // TODO: provide a Soundex and doubleMetaphone function to web worker
-                    // See https://github.com/hgoebl/doublemetaphone
-                    // See https://github.com/NaturalNode/natural
-                    {
-                        name: 'toUpperCase', // TODO use cultures
-                        formula: 'function validate(value, solution) {\n\treturn typeof value === "string" && typeof solution === "string" &&\n\t\tvalue.trim().toUpperCase() === solution.trim().toUpperCase();\n}'
-                    }
-                ],
-                number: [
-                    {
-                        name: 'float', // TODO use cultures
-                        formula: 'function validate(value, solution) {\n\treturn parseFloat(value) === parseFloat(solution);\n}'
-                    },
-                    {
-                        name: 'integer', // TODO use cultures
-                        formula: 'function validate(value, solution) {\n\treturn parseInt(value, 10) === parseInt(solution, 10);\n}'
-                    },
-                    {
-                        name: 'rounded to 2 decimals', // TODO use cultures
-                        formula: 'function validate(value, solution) {\n\treturn typeof value === "number" && typeof solution === "number" && Math.round(value*100)/100 === Math.round(solution*100)/100;\n}'
-                    }
-                ],
-                boolean: [
-                    {
-                        name: 'default',
-                        formula: 'function validate(value, solution) {\n\treturn typeof value === "boolean" && typeof solution === "boolean" && value === solution;\n}'
-                    }
-                ],
-                date: [
-                    {
-                        name: 'date',
-                        formula: 'function validate(value, solution) {\n\treturn typeof value === "date" && typeof solution === "date" && value.toDateString() === solution.toDateString();\n}'
-                    }
-                ],
-                default: [
-                    {
-                        name: 'deepEqual',
-                        formula: '' // TODO: deepEqual - consider https://github.com/jquery/qunit/blob/0cf737d46775aecb06780e3df36cb9cac6d01b0c/src/equiv.js
-                    }
-                ]
             }
         });
 
@@ -664,7 +898,7 @@
             width: 0,
             getHtml: undefined
         });
-        kidoju.tools.register(Pointer);
+        tools.register(Pointer);
 
         /**
          * @class Label tool
@@ -675,13 +909,13 @@
             icon: 'document_orientation_landscape',
             cursor: CURSOR_CROSSHAIR,
             templates: {
-                default: '<span style="#: attributes.style #">#: attributes.text #</span>'
+                default: '<div style="#: attributes.style #">#: attributes.text #</div>'
             },
             height: 100,
             width: 300,
             attributes: {
-                text: new adapters.StringAdapter({defaultValue: 'Label'}),
-                style: new adapters.StyleAdapter({defaultValue: 'font-family: Georgia, serif; color: #FF0000;'})
+                text: new adapters.StringAdapter({ title: 'Label', defaultValue: 'Label' }),
+                style: new adapters.StyleAdapter({ title: 'Style' })
             },
 
             /**
@@ -691,7 +925,7 @@
              * @returns {*}
              */
             getHtml: function (component) {
-                if (component instanceof kidoju.PageComponent) {
+                if (component instanceof PageComponent) {
                     var template = kendo.template(this.templates.default);
                     return template(component);
                 }
@@ -705,36 +939,17 @@
              */
             onResize: function (e, component) {
                 var stageElement = $(e.currentTarget);
-                if (stageElement.is(ELEMENT_CLASS) && component instanceof kidoju.PageComponent) {
-                    var content = stageElement.find('>span');
+                if (stageElement.is(ELEMENT_CLASS) && component instanceof PageComponent) {
+                    var content = stageElement.find('>div');
                     if ($.type(component.width) === NUMBER) {
                         content.width(component.width);
                     }
                     if ($.type(component.height) === NUMBER) {
                         content.height(component.height);
+                        if (component.attributes && !/font(-size)?:[^;]*[0-9]+px/.test(component.attributes.style)) {
+                            content.css('font-size', Math.floor(0.85 * component.height));
+                        }
                     }
-                    var fontSize = parseInt(content.css('font-size'), 10);
-                    var clone = content.clone()
-                        .hide()
-                        .css({
-                            position: ABSOLUTE,
-                            height: 'auto'
-                        })
-                        .width(component.width);
-                    stageElement.after(clone);
-                    // if no overflow, increase until overflow
-                    while (clone.height() < component.height) {
-                        fontSize++;
-                        clone.css('font-size', fontSize);
-                    }
-                    // if overflow, decrease until no overflow
-                    while (clone.height() > component.height) {
-                        fontSize--;
-                        clone.css('font-size', fontSize);
-                    }
-                    clone.remove();
-                    content.css('font-size', fontSize);
-
                     // prevent any side effect
                     e.preventDefault();
                     // prevent event to bubble on stage
@@ -742,7 +957,7 @@
                 }
             }
         });
-        kidoju.tools.register(Label);
+        tools.register(Label);
 
         /**
          * @class Image tool
@@ -758,8 +973,8 @@
             height: 250,
             width: 250,
             attributes: {
-                src: new adapters.StringAdapter(),
-                alt: new adapters.StringAdapter()
+                src: new adapters.AssetAdapter({ title: 'Image', defaultValue: 'https://d2rvsmwqptocm.cloudfront.net/images/o_collection/svg/office/painting_landscape.svg' }),
+                alt: new adapters.StringAdapter({ title: 'Text', defaultValue: 'Painting Landscape' })
             },
             /**
              * Get Html content
@@ -768,7 +983,7 @@
              * @returns {*}
              */
             getHtml: function (component) {
-                if (component instanceof kidoju.PageComponent) {
+                if (component instanceof PageComponent) {
                     var template = kendo.template(this.templates.default);
                     return template(component);
                 }
@@ -781,7 +996,7 @@
              */
             onResize: function (e, component) {
                 var stageElement = $(e.currentTarget);
-                if (stageElement.is(ELEMENT_CLASS) && component instanceof kidoju.PageComponent) {
+                if (stageElement.is(ELEMENT_CLASS) && component instanceof PageComponent) {
                     var content = stageElement.find('>img');
                     if ($.type(component.width) === NUMBER) {
                         content.width(component.width);
@@ -796,7 +1011,7 @@
                 }
             }
         });
-        kidoju.tools.register(Image);
+        tools.register(Image);
 
         /**
          * @class Textbox tool
@@ -807,24 +1022,26 @@
             icon: 'text_field',
             cursor: CURSOR_CROSSHAIR,
             templates: {
-                default: '<input type="text" style="#: attributes.style #" data-#= ns #bind="value: #: properties.name #">'
+                default: '<input type="text" class="k-textbox" style="#: attributes.style #" data-#= ns #bind="value: #: properties.name #">'
             },
             height: 100,
             width: 300,
             attributes: {
-                style: new adapters.StyleAdapter()
+                style: new adapters.StyleAdapter({ title: 'Style' })
             },
             properties: {
-                name: new adapters.NameAdapter({title: 'Name'}),
-                description: new adapters.StringAdapter({title: 'Description'}),
-                solution: new adapters.StringAdapter({title: 'Solution'}),
+                name: new adapters.NameAdapter({ title: 'Name' }),
+                description: new adapters.StringAdapter({ title: 'Description' }),
+                solution: new adapters.StringAdapter({ title: 'Solution' }),
                 validation: new adapters.ValidationAdapter({
-                    title: 'Validation',
-                    solutionType: STRING
+                    title: 'Validation'
+                    // The following is now achieved in kidoju.Tool.init
+                    // solutionAdapter: new adapters.StringAdapter({ title: 'Solution' }),
+                    // defaultValue: '// ' + adapters.StringAdapter.prototype.libraryDefault
                 }),
-                success: new adapters.ScoreAdapter({title: 'Success'}),
-                failure: new adapters.ScoreAdapter({title: 'Failure'}),
-                omit: new adapters.ScoreAdapter({title: 'Omit'})
+                success: new adapters.ScoreAdapter({ title: 'Success', defaultValue: 1 }),
+                failure: new adapters.ScoreAdapter({ title: 'Failure', defaultValue: 0 }),
+                omit: new adapters.ScoreAdapter({ title: 'Omit', defaultValue: 0 })
             },
             /**
              * Get Html content
@@ -833,9 +1050,9 @@
              * @returns {*}
              */
             getHtml: function (component) {
-                if (component instanceof kidoju.PageComponent) {
+                if (component instanceof PageComponent) {
                     var template = kendo.template(this.templates.default);
-                    return template($.extend(component, {ns: kendo.ns}));
+                    return template($.extend(component, { ns: kendo.ns }));
                 }
             },
 
@@ -847,14 +1064,16 @@
              */
             onResize: function (e, component) {
                 var stageElement = $(e.currentTarget);
-                if (stageElement.is(ELEMENT_CLASS) && component instanceof kidoju.PageComponent) {
+                if (stageElement.is(ELEMENT_CLASS) && component instanceof PageComponent) {
                     var content = stageElement.find('>input');
                     if ($.type(component.width) === NUMBER) {
                         content.width(component.width);
                     }
                     if ($.type(component.height) === NUMBER) {
                         content.height(component.height);
-                        content.css('font-size', Math.floor(0.75 * component.height));
+                        if (component.attributes && !/font(-size)?:[^;]*[0-9]+px/.test(component.attributes.style)) {
+                            content.css('font-size', Math.floor(0.65 * component.height));
+                        }
                     }
                     // prevent any side effect
                     e.preventDefault();
@@ -863,93 +1082,7 @@
                 }
             }
         });
-        kidoju.tools.register(Textbox);
-
-        /**
-         * @class Button tool
-         * @type {void|*}
-         */
-        var Button = kidoju.Tool.extend({
-            id: 'button',
-            icon: 'button',
-            cursor: CURSOR_CROSSHAIR,
-            templates: {
-                default: '<a class="k-toggle-button k-button" style="#: attributes.style #">#: attributes.text #</a><input type="hidden" data-#= ns #bind="value: #: properties.name #">'
-                // k-state-active
-            },
-            height: 100,
-            width: 300,
-            attributes: {
-                style: new adapters.StyleAdapter(),
-                activeStyle: new adapters.StyleAdapter(),
-                text: new adapters.StringAdapter({defaultValue: 'Button'})
-            },
-            properties: {
-                name: new adapters.NameAdapter({title: 'Name'}),
-                description: new adapters.StringAdapter({title: 'Description'}),
-                solution: new adapters.BooleanAdapter({title: 'Solution'}),
-                validation: new adapters.ValidationAdapter({
-                    title: 'Validation',
-                    solutionType: BOOLEAN
-                }),
-                success: new adapters.ScoreAdapter({title: 'Success'}),
-                failure: new adapters.ScoreAdapter({title: 'Failure'}),
-                omit: new adapters.ScoreAdapter({title: 'Omit'})
-            },
-
-            /**
-             * Get Html content
-             * @method getHtml
-             * @param component
-             * @returns {*}
-             */
-            getHtml: function (component) {
-                if (component instanceof kidoju.PageComponent) {
-                    var template = kendo.template(this.templates.default);
-                    return template($.extend(component, {ns: kendo.ns}));
-                }
-            },
-
-            /**
-             * Add event handlers
-             * @param component
-             */
-            addEvents: function (component) {
-
-            },
-
-            /**
-             * Remove event handlers
-             * @param component
-             */
-            removeEvents: function (component) {
-
-            },
-            /**
-             * onResize Event Handler
-             * @method onResize
-             * @param e
-             * @param component
-             */
-            onResize: function (e, component) {
-                var stageElement = $(e.currentTarget);
-                if (stageElement.is(ELEMENT_CLASS) && component instanceof kidoju.PageComponent) { // TODO: same id, same tool?
-                    var anchor = stageElement.find('>a');
-                    if ($.type(component.width) === NUMBER) {
-                        anchor.width(component.width - 14);
-                    }
-                    if ($.type(component.height) === NUMBER) {
-                        anchor.height(component.height - 4);
-                        anchor.css('font-size', Math.floor(0.6 * component.height));
-                    }
-                    // prevent any side effect
-                    e.preventDefault();
-                    // prevent event to bubble on stage
-                    e.stopPropagation();
-                }
-            }
-        });
-        kidoju.tools.register(Button);
+        tools.register(Textbox);
 
         /**
          * @class Quiz tool
@@ -966,21 +1099,23 @@
             height: 60,
             width: 500,
             attributes: {
-                checkboxStyle: new adapters.StyleAdapter(),
-                labelStyle: new adapters.StyleAdapter(),
-                text: new adapters.StringAdapter({defaultValue: 'text'})
+                checkboxStyle: new adapters.StyleAdapter({ title: 'Checkbox Style' }),
+                labelStyle: new adapters.StyleAdapter({ title: 'Label Style' }),
+                text: new adapters.StringAdapter({ title: 'Text', defaultValue: 'text' })
             },
             properties: {
-                name: new adapters.NameAdapter({title: 'Name'}),
-                description: new adapters.StringAdapter({title: 'Description'}),
-                solution: new adapters.BooleanAdapter({title: 'Solution'}),
+                name: new adapters.NameAdapter({ title: 'Name' }),
+                description: new adapters.StringAdapter({ title: 'Description' }),
+                solution: new adapters.BooleanAdapter({ title: 'Solution' }),
                 validation: new adapters.ValidationAdapter({
-                    title: 'Validation',
-                    solutionType: BOOLEAN
+                    title: 'Validation'
+                    // The following is now achieved in kidoju.Tool.init
+                    // solutionAdapter: new adapters.BooleanAdapter({ title: 'Solution' }),
+                    // defaultValue: '// ' + adapters.StringAdapter.prototype.libraryDefault
                 }),
-                success: new adapters.ScoreAdapter({title: 'Success'}),
-                failure: new adapters.ScoreAdapter({title: 'Failure'}),
-                omit: new adapters.ScoreAdapter({title: 'Omit'})
+                success: new adapters.ScoreAdapter({ title: 'Success', defaultValue: 1 }),
+                failure: new adapters.ScoreAdapter({ title: 'Failure', defaultValue: 0 }),
+                omit: new adapters.ScoreAdapter({ title: 'Omit', defaultValue: 0 })
             },
 
             /**
@@ -990,9 +1125,9 @@
              * @returns {*}
              */
             getHtml: function (component) {
-                if (component instanceof kidoju.PageComponent) {
+                if (component instanceof PageComponent) {
                     var template = kendo.template(this.templates.default);
-                    return template($.extend(component, {ns: kendo.ns}));
+                    return template($.extend(component, { ns: kendo.ns }));
                 }
             },
 
@@ -1004,43 +1139,9 @@
              */
             onResize: function (e, component) {
                 var stageElement = $(e.currentTarget);
-                if (stageElement.is(ELEMENT_CLASS) && component instanceof kidoju.PageComponent) { // TODO: same id, same tool?
+                if (stageElement.is(ELEMENT_CLASS) && component instanceof PageComponent) { // TODO: same id, same tool?
                     var content = stageElement.find('>div');
-                    var clone = content.clone()
-                        .hide()
-                        .css({
-                            position: 'absolute',
-                            height: 'auto',
-                            width: 'auto'
-                        });
-                    stageElement.after(clone);
-                    var input = clone.find('input[type="checkbox"]'),
-                        label = clone.find('label'),
-                        fontSize = parseInt(label.css('font-size'));
-                    // if no overflow, increase until overflow
-                    while (clone.width() <= component.width && clone.height() <= component.height) {
-                        fontSize++;
-                        label.css('font-size', fontSize);
-                        input.css({
-                            height: fontSize * 2 / 3,
-                            width: fontSize * 2 / 3
-                        });
-                    }
-                    // if overflow, decrease until no overflow
-                    while (clone.width() > component.width || clone.height() > component.height) {
-                        fontSize--;
-                        label.css('font-size', fontSize);
-                        input.css({
-                            height: fontSize * 2 / 3,
-                            width: fontSize * 2 / 3
-                        });
-                    }
-                    clone.remove();
-                    content.find('label').css('font-size', fontSize);
-                    content.find('input[type="checkbox"]').css({
-                        height: fontSize * 2 / 3,
-                        width: fontSize * 2 / 3
-                    });
+                    // TODO
                     // prevent any side effect
                     e.preventDefault();
                     // prevent event to bubble on stage
@@ -1049,10 +1150,11 @@
             }
 
         });
-        kidoju.tools.register(CheckBox);
+        tools.register(CheckBox);
 
         /**
-         * @class Quiz tool
+         * Quiz tool
+         * @class Quiz
          * @type {void|*}
          */
         var Quiz = kidoju.Tool.extend({
@@ -1060,35 +1162,30 @@
             icon: 'radio_button_group',
             cursor: CURSOR_CROSSHAIR,
             templates: {
-                // TODO See http://www.telerik.com/forums/font-size-of-styled-radio-buttons-and-checkboxes
-                default: '<div>' +
-                '<div><input id="#: properties.name #_1" type="radio" name="#: properties.name #" style="#: attributes.radioStyle #" value="1" data-#= ns #bind="checked: #: properties.name #"><label for="#: properties.name #_1" style="#: attributes.labelStyle #">#: attributes.text1 #</label></div>' +
-                '<div><input id="#: properties.name #_2" type="radio" name="#: properties.name #" style="#: attributes.radioStyle #" value="2" data-#= ns #bind="checked: #: properties.name #"><label for="#: properties.name #_2" style="#: attributes.labelStyle #">#: attributes.text2 #</label></div>' +
-                '<div><input id="#: properties.name #_3" type="radio" name="#: properties.name #" style="#: attributes.radioStyle #" value="3" data-#= ns #bind="checked: #: properties.name #"><label for="#: properties.name #_3" style="#: attributes.labelStyle #">#: attributes.text3 #</label></div>' +
-                '<div><input id="#: properties.name #_4" type="radio" name="#: properties.name #" style="#: attributes.radioStyle #" value="4" data-#= ns #bind="checked: #: properties.name #"><label for="#: properties.name #_4" style="#: attributes.labelStyle #">#: attributes.text4 #</label></div>' +
-                '</div>'
+                default: '<div data-role="quiz" data-mode="#: attributes.mode #" data-#= ns #bind="value: #: properties.name #" data-source="#: JSON.stringify(attributes.data.trim().split(\'\\n\')) #" data-group-style="#: attributes.groupStyle #" data-item-style="#: attributes.itemStyle #" data-active-style="#: attributes.activeStyle #"></div>'
             },
             height: 300,
             width: 500,
             attributes: {
-                labelStyle: new adapters.StyleAdapter(),
-                radioStyle: new adapters.StyleAdapter(),
-                text1: new adapters.StringAdapter({defaultValue: 'text1'}),
-                text2: new adapters.StringAdapter({defaultValue: 'text2'}),
-                text3: new adapters.StringAdapter({defaultValue: 'text3'}),
-                text4: new adapters.StringAdapter({defaultValue: 'text4'})
+                mode: new adapters.EnumAdapter({ title: 'Mode', defaultValue: 'button', enum: ['button', 'dropdown', 'radio'] }),
+                groupStyle: new adapters.StyleAdapter({ title: 'Group Style' }),
+                itemStyle: new adapters.StyleAdapter({ title: 'Item Style' }),
+                activeStyle: new adapters.StyleAdapter({ title: 'Active Style' }),
+                data: new adapters.TextAdapter({ title: 'Data', defaultValue: 'Text 1\nText 2' })
             },
             properties: {
-                name: new adapters.NameAdapter({title: 'Name'}),
-                description: new adapters.StringAdapter({title: 'Description'}),
-                solution: new adapters.StringAdapter({title: 'Solution'}),
+                name: new adapters.NameAdapter({ title: 'Name' }),
+                description: new adapters.StringAdapter({ title: 'Description' }),
+                solution: new adapters.StringAdapter({ title: 'Solution' }),
                 validation: new adapters.ValidationAdapter({
-                    title: 'Validation',
-                    solutionType: STRING
+                    title: 'Validation'
+                    // The following is now achieved in kidoju.Tool.init
+                    // solutionAdapter: new adapters.BooleanAdapter({ title: 'Solution' }),
+                    // defaultValue: '// ' + adapters.StringAdapter.prototype.libraryDefault)
                 }),
-                success: new adapters.ScoreAdapter({title: 'Success'}),
-                failure: new adapters.ScoreAdapter({title: 'Failure'}),
-                omit: new adapters.ScoreAdapter({title: 'Omit'})
+                success: new adapters.ScoreAdapter({ title: 'Success', defaultValue: 1 }),
+                failure: new adapters.ScoreAdapter({ title: 'Failure', defaultValue: 0 }),
+                omit: new adapters.ScoreAdapter({ title: 'Omit', defaultValue: 0 })
             },
 
             /**
@@ -1098,11 +1195,14 @@
              * @returns {*}
              */
             getHtml: function (component) {
-                if (component instanceof kidoju.PageComponent) {
+                if (component instanceof PageComponent) {
                     var template = kendo.template(this.templates.default);
-                    return template($.extend(component, {ns: kendo.ns}));
+                    return template($.extend(component, { ns: kendo.ns }));
                 }
             },
+
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
 
             /**
              * onResize Event Handler
@@ -1112,49 +1212,25 @@
              */
             onResize: function (e, component) {
                 var stageElement = $(e.currentTarget);
-                if (stageElement.is(ELEMENT_CLASS) && component instanceof kidoju.PageComponent) { // TODO: same id, same tool?
+                if (stageElement.is(ELEMENT_CLASS) && component instanceof PageComponent) {
                     var content = stageElement.find('>div');
-                    /*
-                     stageElement.css({
-                     height: height,
-                     width: width
-                     });
-                     */
-                    var clone = content.clone()
-                        .hide()
-                        .css({
-                            position: 'absolute',
-                            height: 'auto',
-                            width: 'auto'
-                        });
-                    stageElement.after(clone);
-                    var inputs = clone.find('input[type="radio"]'),
-                        labels = clone.find('label'),
-                        fontSize = parseInt(labels.css('font-size'));
-                    // if no overflow, increase until overflow
-                    while (clone.width() <= component.width && clone.height() <= component.height) {
-                        fontSize++;
-                        labels.css('font-size', fontSize);
-                        inputs.css({
-                            height: fontSize * 2 / 3,
-                            width: fontSize * 2 / 3
-                        });
+                    var data = component.attributes.data;
+                    var length = data.trim().split('\n').length || 1;
+                    var height = $.type(component.height) === NUMBER ? component.height : 0;
+                    // var width = $.type(component.width) === NUMBER ? component.width : 0;
+                    // content.width(width);
+                    // content.height(height);
+                    switch (component.attributes.mode) {
+                        case 'button':
+                            content.css('font-size', Math.floor(0.57 * height));
+                            break;
+                        case 'dropdown':
+                            content.css('font-size', Math.floor(0.5 * height));
+                            break;
+                        case 'radio':
+                            content.css('font-size', Math.floor(0.9 * height / (length || 1)));
+                            break;
                     }
-                    // if overflow, decrease until no overflow
-                    while (clone.width() > component.width || clone.height() > component.height) {
-                        fontSize--;
-                        labels.css('font-size', fontSize);
-                        inputs.css({
-                            height: fontSize * 2 / 3,
-                            width: fontSize * 2 / 3
-                        });
-                    }
-                    clone.remove();
-                    content.find('label').css('font-size', fontSize);
-                    content.find('input[type="radio"]').css({
-                        height: fontSize * 2 / 3,
-                        width: fontSize * 2 / 3
-                    });
                     // prevent any side effect
                     e.preventDefault();
                     // prevent event to bubble on stage
@@ -1162,23 +1238,59 @@
                 }
             }
 
-        });
-        kidoju.tools.register(Quiz);
+            /* jshint +W074 */
 
+        });
+        tools.register(Quiz);
+
+        /**
+         * Audio tool
+         * @class Audio
+         */
+        var Audio = kidoju.Tool.extend({
+            id: 'audio',
+            icon: 'loudspeaker3',
+            cursor: CURSOR_CROSSHAIR,
+            templates: {
+                // TODO Make a Kendo UI media Player - See http://blog.falafel.com/new-kendo-ui-media-player-widget-mvvm/
+                default: '<audio controls>' +
+                    // TODO test attributes.ogg and attributes.mpeg
+                    '<source src="#= attributes.ogg #" type="audio/ogg" />' +
+                    '<source src="#= attributes.mpeg #" type="audio/mpeg" />' +
+                '</audio>'
+            },
+            height: 50,
+            width: 500,
+            attributes: {
+                ogg: new adapters.AssetAdapter({ title: 'Ogg File' }),
+                mpeg: new adapters.AssetAdapter({ title: 'Mpeg File' })
+            },
+
+            /**
+             * Get Html content
+             * @method getHtml
+             * @param component
+             * @returns {*}
+             */
+            getHtml: function (component) {
+                if (component instanceof PageComponent) {
+                    var template = kendo.template(this.templates.default);
+                    return template($.extend(component, { ns: kendo.ns }));
+                }
+            }
+        });
+        tools.register(Audio);
 
         /**
          * We could also consider
-         * ButtonGroup
          * HTML
          * Drawing surface
          * Shape
-         * Select
          * Checkbox
          * Drop Target
          * Connector
          * Clock
          * Video
-         * Sound
          * Text-to-Speech
          * MathJax
          * Grid
@@ -1189,6 +1301,8 @@
          ******************************************************************************/
 
     }(window.jQuery));
+
+    /* jshint +W071 */
 
     return window.kidoju;
 
