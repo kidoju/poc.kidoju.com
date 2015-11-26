@@ -41,7 +41,7 @@
         var location = window.location;
         var workerLibPath = location.protocol + '//' + location.host + '/js/kidoju.data.workerlib.js'; // TODO move to config files including minification
         // var workerLibPath = location.protocol + '//' + location.host + '/src/js/kidoju.data.workerlib.js'; // for WEINRE
-        var workerTimeout = 250; // TODO: move to config
+        var workerTimeout = 500; // TODO: move to config
 
 
         /*********************************************************************************
