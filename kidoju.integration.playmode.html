@@ -469,7 +469,14 @@
                     { type: 'separator' },
                     { type: 'button', id: 'submit', text: 'Submit' },
                     { type: 'button', id: 'score', text: 'Score', hidden: true },
-                    { type: 'button', id: 'review', text: 'Review', enable: false }
+                    { type: 'button', id: 'review', text: 'Review', enable: false },
+                    { id: 'help', type: 'button', text: 'Help', click: function(e) {
+                        var height = 600;
+                        var width = 800;
+                        var left = window.screenX + ($(window).width() - width) / 2;
+                        var top = window.screenY + ($(window).height() - height) / 2;
+                        window.open('./UserGuide.pdf','_blank', 'top=' + top + ', left=' + left + ', width=' + width + ', height=' + height + ', directories=no, location=no, menubar=no, status=no, titlebar=no, toolbar=no');
+                    } }
                 ],
                 click: function (e) {
                     var sections = $('div.centered>div');

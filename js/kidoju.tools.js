@@ -721,7 +721,7 @@
                         {
                             name: 'G-Collection',
                             transport: {
-                                read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/g_collection/svg/all/index.json'
+                                read: 'http://poc.kidoju.com//data/images/g_collection/svg/all/index.json'
                             }
                         },
                         {
@@ -730,19 +730,19 @@
                                 {
                                     name: 'Dark Grey',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/o_collection/svg/dark_grey/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/o_collection/svg/dark_grey/index.json'
                                     }
                                 },
                                 {
                                     name: 'Office',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/o_collection/svg/office/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/o_collection/svg/office/index.json'
                                     }
                                 },
                                 {
                                     name: 'White',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/o_collection/svg/white/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/o_collection/svg/white/index.json'
                                     }
                                 }
                             ]
@@ -753,25 +753,25 @@
                                 {
                                     name: 'Small',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/32x32/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/v_collection/png/32x32/index.json'
                                     }
                                 },
                                 {
                                     name: 'Medium',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/64x64/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/v_collection/png/64x64/index.json'
                                     }
                                 },
                                 {
                                     name: 'Large',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/128x128/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/v_collection/png/128x128/index.json'
                                     }
                                 },
                                 {
                                     name: 'Huge',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/v_collection/png/256x256/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/v_collection/png/256x256/index.json'
                                     }
                                 }
                             ]
@@ -782,13 +782,13 @@
                                 {
                                     name: 'Small',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/x_collection/png/32x32/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/x_collection/png/32x32/index.json'
                                     }
                                 },
                                 {
                                     name: 'Large',
                                     transport: {
-                                        read: 'http://localhost:63342/Kidoju.Widgets/test/data/images/x_collection/png/128x128/index.json'
+                                        read: 'http://poc.kidoju.com//data/images/x_collection/png/128x128/index.json'
                                     }
                                 }
                             ]

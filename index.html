@@ -546,11 +546,18 @@
                 //Init toolbar
                 $(kendo.roleSelector('toolbar')).kendoToolBar({
                     items: [
-                        { id: 'add', type: 'button', text: 'Add Page'},
-                        { id: 'delete', type: 'button', text: 'Delete Page'},
-                        { id: 'save', type: 'button', text: 'Save'},
-                        { id: 'reset', type: 'button', text: 'Reset'},
-                        { id: 'play', type: 'button', text: 'Play', primary: true}
+                        { id: 'add', type: 'button', text: 'Add Page' },
+                        { id: 'delete', type: 'button', text: 'Delete Page' },
+                        { id: 'save', type: 'button', text: 'Save' },
+                        { id: 'reset', type: 'button', text: 'Reset' },
+                        { id: 'play', type: 'button', text: 'Play', primary: true },
+                        { id: 'help', type: 'button', text: 'Help', click: function(e) {
+                            var height = 600;
+                            var width = 800;
+                            var left = window.screenX + ($(window).width() - width) / 2;
+                            var top = window.screenY + ($(window).height() - height) / 2;
+                            window.open('./UserGuide.pdf','_blank', 'top=' + top + ', left=' + left + ', width=' + width + ', height=' + height + ', directories=no, location=no, menubar=no, status=no, titlebar=no, toolbar=no');
+                        } }
                     ],
                     click: function(e) {
                         switch(e.id) {
