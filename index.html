@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>kidoju.integration.designmode</title>
+    <!-- weinre - see http://people.apache.org/~pmuellr/weinre/docs/latest -->
+    <!--script src="http://10.0.0.105:8080/target/target-script-min.js#anonymous"></script-->
     <script>
         window.app = { DEBUG: true };
     </script>
@@ -44,17 +46,19 @@
     <link href="./styles/kidoju.widgets.explorer.css" rel="stylesheet">
     <link href="./styles/kidoju.widgets.navigation.css" rel="stylesheet">
     <link href="./styles/kidoju.widgets.stage.css" rel="stylesheet">
+    <link href="./styles/kidoju.widgets.mediaplayer.css" rel="stylesheet">
     <link href="./styles/kidoju.widgets.codeeditor.css" rel="stylesheet">
     <link href="./styles/kidoju.widgets.assetmanager.css" rel="stylesheet">
     <script src="./js/window.assert.js"></script>
-    <script src="./js/window.log.js"></script>
+    <script src="./js/window.logger.js"></script>
     <script src="./js/kidoju.data.js"></script>
     <script src="./js/kidoju.tools.js"></script>
     <script src="./js/kidoju.widgets.explorer.js"></script>
-    <script src="./js/kidoju.widgets.navigation.js"></script>
     <script src="./js/kidoju.widgets.stage.js"></script>
+    <script src="./js/kidoju.widgets.navigation.js"></script>
     <script src="./js/kidoju.widgets.toolbox.js"></script>
     <script src="./js/kidoju.widgets.quiz.js"></script>
+    <script src="./js/kidoju.widgets.mediaplayer.js"></script>
     <script src="./js/kidoju.widgets.propertygrid.js"></script>
     <script src="./js/kidoju.widgets.codeinput.js"></script>
     <script src="./js/kidoju.widgets.codeeditor.js"></script>
@@ -132,16 +136,20 @@
                             <div data-role="explorer" data-bind="source: currentPage.components, value: currentComponent"></div>
                         </li>
                         <li>
-                            Attributes
+                            Display Attributes
                             <div id="attributes" data-role="propertygrid" data-bind="value: currentComponent"></div>
                         </li>
                         <li>
-                            Properties
+                            Test Logic
                             <div id="properties" data-role="propertygrid" data-bind="value: currentComponent"></div>
                         </li>
                         <li>
                             Instructions
                             <div id="instructions" style="padding:0.5em;"><textarea rows="10" data-bind="value: currentPage.instructions, enabled: currentPage" class="k-textbox" style="width:100%;resize:vertical;"></textarea></div>
+                        </li>
+                        <li>
+                            Explanations
+                            <div id="explanations" style="padding:0.5em;"><textarea rows="10" data-bind="value: currentPage.explanations, enabled: currentPage" class="k-textbox" style="width:100%;resize:vertical;"></textarea></div>
                         </li>
                     </ul>
                 </div>
@@ -168,8 +176,8 @@
                 PageComponentCollectionDataSource = kidoju.data.PageComponentCollectionDataSource;
 
             //LocalStream with localStorage methods
-            var storageKey = 'kidoju.integration',
-                LocalStream = Stream.define({
+            var storageKey = 'kidoju.integration';
+            var LocalStream = Stream.define({
                     _fetchAll: function() {
                         var that = this,
                             dfd = $.Deferred();
@@ -205,8 +213,8 @@
                         that.accept(data);
                         return that._fetchAll();
                     }
-                }),
-                streamData = {
+                });
+            var streamData = {
                     "pages": [{
                         "id": "40365503-413a-49e2-990b-bde37541892b",
                         "style": "",
@@ -258,7 +266,7 @@
                             "rotate": 0,
                             "tag": null,
                             "attributes": {
-                                "src": "http://uploads2.wikiart.org/images/pablo-picasso/self-portrait-1907.jpg",
+                                "src": "data://self-portrait-1907.jpg",
                                 "alt": "Painting Landscape"
                             }
                         }]
@@ -307,7 +315,7 @@
                             "rotate": 0,
                             "tag": null,
                             "attributes": {
-                                "src": "http://www.billcopelandmusicnews.com/wp-content/uploads/2015/08/Elvis.jpg",
+                                "src": "data://Elvis.jpg",
                                 "alt": "Painting Landscape"
                             }
                         }]
@@ -324,7 +332,7 @@
                             "rotate": 0,
                             "tag": null,
                             "attributes": {
-                                "src": "http://st.hist-geo.co.uk/img/france/France-Fleuves-1.png",
+                                "src": "data://France-Fleuves-1.png",
                                 "alt": "Painting Landscape"
                             }
                         }, {
@@ -461,6 +469,11 @@
                         }]
                     }]
                 };
+
+            kidoju.schemes = {
+                cdn: 'https://d2rvsmwqptocm.cloudfront.net/',
+                data: window.location.protocol + '//' + window.location.host + '/data/images/miscellaneous/'
+            };
 
             //Create some dummy data
             if (!window.localStorage.getItem(storageKey)) {

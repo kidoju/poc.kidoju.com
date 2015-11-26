@@ -9,13 +9,13 @@
 (function (f, define) {
     'use strict';
     define([
+        './window.assert',
+        './window.logger',
         './kidoju.data',
         './kidoju.tools',
         './vendor/kendo/kendo.numerictextbox',
         './vendor/kendo/kendo.datepicker',
-        './vendor/kendo/kendo.mobile.switch',
-        './window.assert',
-        './window.log'
+        './vendor/kendo/kendo.mobile.switch'
     ], f);
 })(function () {
 
@@ -29,7 +29,7 @@
         var Widget = ui.Widget;
         var kidoju = window.kidoju = window.kidoju || {};
         // var assert = window.assert;
-        var logger = new window.Log('kidoju.widgets.propertygrid');
+        var logger = new window.Logger('kidoju.widgets.propertygrid');
         var OBJECT = 'object';
         var STRING = 'string';
         var NUMBER = 'number';
@@ -500,16 +500,6 @@
          *********************************************************************************/
 
         var util = {
-
-            /**
-             * Log function
-             * @param message
-             */
-            log: function (message) {
-                if (window.app && window.app.DEBUG && window.console && $.isFunction(window.console.log)) {
-                    window.console.log('kidoju.widgets.propertygrid: ' + message);
-                }
-            },
 
             /**
              * Return a hash object from an array of rows

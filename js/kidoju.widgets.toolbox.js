@@ -9,11 +9,11 @@
 (function (f, define) {
     'use strict';
     define([
+        './window.assert',
+        './window.logger',
         './vendor/kendo/kendo.binder',
         './kidoju.data',
-        './kidoju.tools',
-        './window.assert',
-        './window.log'
+        './kidoju.tools'
     ], f);
 })(function () {
 
@@ -27,7 +27,7 @@
         var tools = kidoju.tools;
         var Tool = kidoju.Tool;
         // var assert = window.assert;
-        var logger = new window.Log('kidoju.widgets.toolbox');
+        var logger = new window.Logger('kidoju.widgets.toolbox');
         var STRING = 'string';
         var CLICK = 'click';
         var CHANGE = 'change';
@@ -107,7 +107,7 @@
                     }
                     if (id !== that.options.tools.get(ACTIVE_TOOL)) {
                         that.options.tools.set(ACTIVE_TOOL, id);// the change handler refreshes the widget
-                        logger.debug('tool changed for ' + id);
+                        logger.debug('tool changed for `' + id + '`');
                         that.trigger(CHANGE, { value: id });
                     }
                 } else {

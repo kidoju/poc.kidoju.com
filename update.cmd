@@ -15,3 +15,7 @@ REM copy kidoju.integration.playmode.html
 ATTRIB -R .\kidoju.integration.playmode.html
 COPY ..\Kidoju.Widgets\src\kidoju.integration.playmode.html .\ /Y
 ATTRIB +R .\kidoju.integration.playmode.html
+
+REM Copy data
+XCOPY ..\Kidoju.Widgets\test\data .\data /E /I /R /Y
+ATTRIB +R .\data\*.* /S

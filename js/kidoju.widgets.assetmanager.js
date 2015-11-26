@@ -9,13 +9,13 @@
 (function (f, define) {
     'use strict';
     define([
+        './window.assert',
+        './window.logger',
         './vendor/kendo/kendo.binder',
         './vendor/kendo/kendo.dropdownlist',
-        './vendor/kendo/kendo.tabstrip',
-        './vendor/kendo/kendo.listview',
         './vendor/kendo/kendo.pager',
-        './window.assert',
-        './window.log'
+        './vendor/kendo/kendo.listview',
+        './vendor/kendo/kendo.tabstrip'
     ], f);
 })(function () {
 
@@ -35,22 +35,22 @@
         var Pager = kendo.ui.Pager;
         var TabStrip = kendo.ui.TabStrip;
         var assert = window.assert;
-        var logger = new window.Log('kidoju.widgets.assetmanager');
+        var logger = new window.Logger('kidoju.widgets.assetmanager');
         var NUMBER = 'number';
         var STRING = 'string';
+        var OBJECT = 'object';
         var ARRAY = 'array';
+        var UNDEFINED = 'undefined';
         var CHANGE = 'change';
         var CLICK = 'click';
         var DELETE = 'delete';
         var ERROR = 'error';
         var UPLOAD = 'upload';
-        // var MODULE = 'kidoju.widgets.assetmanager';
         var NS = '.kendoAssetManager';
         var WIDGET_CLASS = 'k-widget kj-assetmanager';
-        var DEFAULT_FILTER = {};
         var TOOLBAR_TMPL = '<div class="k-widget k-filebrowser-toolbar k-header k-floatwrap">' +
                 '<div class="k-toolbar-wrap">' +
-                    '<div class="k-widget k-upload"><div class="k-button k-button-icontext k-upload-button"><span class="k-icon k-add"></span>#=messages.toolbar.upload#<input type="file" name="file" /></div></div>' +
+                    '<div class="k-widget k-upload"><div class="k-button k-button-icontext k-upload-button"><span class="k-icon k-add"></span>#=messages.toolbar.upload#<input type="file" name="file" accept="#=accept#" /></div></div>' +
                     '<button type="button" class="k-button k-button-icon k-state-disabled"><span class="k-icon k-delete" /></button>&nbsp;' +
                     '<label style="display:none">#=messages.toolbar.filter#<select /></label>' +
                 '</div>' +
@@ -58,30 +58,15 @@
                     '<div class="k-widget k-search-wrap k-textbox"><input placeholder="#=messages.toolbar.search#" class="k-input"><a href="\\#" class="k-icon k-i-close k-search"></a></div>' +
                 '</div>' +
             '</div>';
-        var ITEM_TMPL = '<li class="k-tile" ' + kendo.attr('uid') + '="#=uid#" ' + kendo.attr('type') + '="#=type$()#">' +
+        var ITEM_TMPL = '<li class="k-tile" ' + kendo.attr('uid') + '="#=uid#">' + // ' + kendo.attr('type') + '="#=type$()#">' +
                 '#if (/^image\\//.test(type$())){#' +
-                    '<div class="k-thumb"><img alt="#=name$()#" src="#=url#" class="k-image"></span></div>' +
+                    '<div class="k-thumb"><img alt="#=name$()#" src="#=url$()#" class="k-image"></span></div>' +
                 '#}else{#' +
                     '<div class="k-thumb"><span class="k-icon k-file"></span></div>' +
                 '#}#' +
                 '<strong>#=name$()#</strong>' +
                 '<span class="k-filesize">#=size$()#</span>' +
             '</li>';
-        var SCHEMA = {
-                data: 'data',
-                model: {
-                    id: 'url',
-                    fields: {
-                        size: { type: NUMBER, editable: false },
-                        url:  { type: STRING, editable: false, nullable: true }
-                    },
-                    name$: function () { return nameFormatter(this.get('url')); },
-                    size$: function () { return sizeFormatter(this.get('size')); },
-                    type$: function () { return typeFormatter(this.get('url')); }
-                },
-                total: 'total',
-                type: 'json'
-            };
 
         /*********************************************************************************
          * Helpers
@@ -129,6 +114,7 @@
          * @returns {*}
          */
         function typeFormatter(url) {
+            /* jshint maxcomplexity: 12 */
             assert.type(STRING, url, kendo.format(assert.messages.type.default, 'url', STRING));
             var ext = url.split('.').pop();
             switch (ext) {
@@ -164,6 +150,48 @@
 
         /* jshint +W074 */
 
+        /**
+         * Formats a url for display
+         * Assuming this.options.schemes = { cdn: 'https://s3.amazonaws.com/account/bucket/' }
+         * Then this function return ret = https://s3.amazonaws.com/account/bucket/photo.jpg from url = cdn://photo.jpg
+         * This allows us to switch between sources especially for our web and mobile applications
+         * @param url
+         * @param schemes
+         */
+        function urlFormatter(url, schemes) {
+            assert.type(STRING, url, kendo.format(assert.messages.type.default, 'url', STRING));
+            assert.type(OBJECT, schemes, kendo.format(assert.messages.type.default, 'schemes', OBJECT));
+            var ret = url;
+            for (var scheme in schemes) {
+                if (schemes.hasOwnProperty(scheme) && (new RegExp('^' + scheme + '://')).test(url)) {
+                    ret = url.replace(scheme + '://', schemes[scheme]);
+                    break;
+                }
+            }
+            return ret;
+        }
+
+        /**
+         * Gets a datasource filter from an array of extensions
+         * @param extensions
+         * @returns {*}
+         */
+        function getDataSourceFilter(extensions) {
+            extensions = extensions || [];
+            assert.type(ARRAY, extensions, kendo.format(assert.messages.type.default, 'extensions', ARRAY));
+            var ret = null;
+            if (extensions.length === 1) {
+                ret = { field: 'url', operator: 'endswith', value: extensions[0] };
+            } else if (extensions.length > 1) {
+                ret = { logic: 'or', filters: [] };
+                for (var i = 0; i < extensions.length; i++) {
+                    ret.filters.push({ field: 'url', operator: 'endswith', value: extensions[i] });
+                }
+            }
+            return ret;
+        }
+
+
         /*********************************************************************************
          * Widget
          *********************************************************************************/
@@ -195,10 +223,10 @@
                 name: 'AssetManager',
                 toolbarTemplate: TOOLBAR_TMPL,
                 itemTemplate: ITEM_TMPL,
-                schema: SCHEMA,
-                transport: {},
+                transport: { read: function (options) { options.success({ total: 0, data: [] }); } },
                 collections: [],
-                filter: DEFAULT_FILTER,
+                schemes: {},
+                extensions: [],
                 messages: {
                     toolbar: {
                         upload: 'Upload',
@@ -212,36 +240,20 @@
                 }
             },
 
+            setOptions: function (options) {
+                $.noop(); // TODO especially to change filters when extensions change
+            },
+
             /**
              * Widget events
              * @property events
              */
             events: [
                 CHANGE,
-                DELETE,
-                ERROR,
-                UPLOAD
+                // DELETE,
+                ERROR
+                // UPLOAD
             ],
-
-
-            /**
-             * Predefined filtes
-             */
-            filters: {
-                default: DEFAULT_FILTER,
-                images: {
-                    logic: 'or',
-                    filters: [
-                        { field: 'url', operator: 'endswith', value: '.gif' },
-                        { field: 'url', operator: 'endswith', value: '.jpg' },
-                        // { field: 'url', operator: 'endswith', value: '.jpeg' },
-                        { field: 'url', operator: 'endswith', value: '.png' },
-                        { field: 'url', operator: 'endswith', value: '.svg' }
-                    ]
-                },
-                audio: { field: 'url', operator: 'endswith', value: '.mp3' },
-                video: { field: 'url', operator: 'endswith', value: '.mp4' }
-            },
 
             /**
              * Gets the url of the selected item
@@ -253,6 +265,19 @@
                 if (selected instanceof ObservableObject) {
                     return selected.url;
                 }
+            },
+
+            /**
+             * Select an item in the list view
+             * @param index
+             */
+            select: function (index) {
+                if ($.type(index) === NUMBER) {
+                    index = this.listView.items().get(index);
+                } else if ($.type(index) === STRING) {
+                    index = $(index);
+                }
+                return this.listView.select(index);
             },
 
             /**
@@ -325,11 +350,11 @@
             _toolbar: function () {
                 var that = this;
                 var template = kendo.template(that.options.toolbarTemplate);
-                var messages = that.options.messages;
 
                 // Add template
                 that.toolbar = $(template({
-                    messages: messages
+                    accept: (that.options.extensions || []).join(','), // @see http://www.w3schools.com/tags/att_input_accept.asp
+                    messages: that.options.messages
                 })).appendTo(that.fileBrowser);
                 assert.instanceof($, that.toolbar, kendo.format(assert.messages.instanceof.default, 'this.toolbar', 'window.jQuery'));
 
@@ -358,7 +383,7 @@
             },
 
             /**
-             * Event handler triggered when clicking the upload button and selecting a file (which changes teh file input)
+             * Event handler triggered when clicking the upload button and selecting a file (which changes the file input)
              * @param e
              * @private
              */
@@ -368,7 +393,18 @@
                 assert.instanceof(window.HTMLInputElement, e.target, kendo.format(assert.messages.instanceof.default, 'e.target', 'window.HTMLInputElement'));
                 var files = e.target.files;
                 if (files instanceof window.FileList && files.length) {
-                    that.trigger(UPLOAD, { files: files });
+                    // that.trigger(UPLOAD, { files: files });
+                    for (var i = 0; i < files.length; i++) {
+                        // TODO: Assert we are on the right tab !!!!!
+                        that.dataSource.add({
+                            size: files[i].size,
+                            file: files[i]
+                        });
+                        // Note: syncing to the dataSource calls the create transport where you should actually upload your file,
+                        // update the url and push to the dataSource using the options.success callback
+                        // if there is an error, call options.error and cancel changes in the error event raised by the widget
+                        that.dataSource.sync();
+                    }
                     that.toolbar.find('.k-upload input[type=file]').val('');
                 }
             },
@@ -379,7 +415,13 @@
              */
             _onDeleteButtonClick: function () {
                 var that = this;
-                that.trigger(DELETE, { value: that.value() });
+                // that.trigger(DELETE, { value: that.value() });
+                var file = that.dataSource.get(that.value());
+                if (file instanceof kendo.data.Model) {
+                    that.dataSource.remove(file);
+                    // dataSource.sync calls transport.destroy if available
+                    that.dataSource.sync();
+                }
             },
 
             /**
@@ -394,14 +436,14 @@
             },
 
             /**
-             * Event handler trigger when changing search input
+             * Event handler triggered when changing search input
              * @param e
              * @private
              */
             _onSearchInputChange: function (e) {
                 assert.instanceof($.Event, e, kendo.format(assert.messages.instanceof.default, 'e', 'window.jQuery.Event'));
                 assert.instanceof(window.HTMLInputElement, e.target, kendo.format(assert.messages.instanceof.default, 'e.target', 'window.HTMLInputElement'));
-                var filter = this.options.filter;
+                var filter = getDataSourceFilter(this.options.extensions);
                 var value =  $(e.target).val();
                 var search = { field: 'url', operator: 'contains', value: value };
                 if ($.type(value) === STRING && value.length) {
@@ -565,7 +607,7 @@
 
                 // Clear search
                 this.searchInput.val('');
-                this.dataSource.filter(this.options.filter);
+                // this.dataSource.filter(getDataSourceFilter(this.options.extensions));
 
                 if (colIndex >= 0 && colIndex < this.options.collections.length) {
                     var collection = this.options.collections[colIndex];
@@ -586,11 +628,14 @@
                     }
                 } else {
                     this.dataSource.transport = getTransport(this.options.transport);
-                    this.dropDownList.setDataSource([]);
+                    this.dropDownList.setDataSource(null); // []
                     this.dropDownList.wrapper.parent().hide();
                 }
 
-                return this.dataSource.read();
+                // this.dataSource.filter(getDataSourceFilter(this.options.extensions)); requires a read which raises dataBound twice on bound widgets
+                // return this.dataSource.query({ filter: getDataSourceFilter(this.options.extensions) }); also requires read which raises dataBound twice on bound widgets
+                this.dataSource._filter = getDataSourceFilter(this.options.extensions); // this does not raise a dataBound event
+                return this.dataSource.read(); // this raises a dataBound event
             },
 
             /**
@@ -599,23 +644,61 @@
              */
             _dataSource: function (transport) {
 
-                if (this.dataSource instanceof DataSource && this._errorHandler) {
-                    this.dataSource.unbind(ERROR, this._errorHandler);
+                var that = this;
+
+                if (that.dataSource instanceof DataSource && that._errorHandler) {
+                    that.dataSource.unbind(ERROR, that._errorHandler);
                 } else {
-                    this._errorHandler = $.proxy(this._dataError, this);
+                    that._errorHandler = $.proxy(that._dataError, that);
                 }
 
-                this.dataSource = DataSource
+                that.dataSource = DataSource
                     .create({
-                        filter: this.options.filter,
-                        schema: this.options.schema,
+                        filter: getDataSourceFilter(that.options.extensions),
+                        schema: {
+                            data: 'data',
+                            model: {
+                                id: 'url',
+                                fields: {
+                                    size: { type: NUMBER, editable: false },
+                                    url:  { type: STRING, editable: false, nullable: true },
+                                    file: { defaultValue: null } // Note: we need this for uploading files
+                                },
+                                name$: function () {
+                                    var url = this.get('url');
+                                    if ($.type(url) === UNDEFINED) {
+                                        return 'Uploading...'; // TODO
+                                    }
+                                    return nameFormatter(url);
+                                },
+                                size$: function () {
+                                    return sizeFormatter(this.get('size'));
+                                },
+                                type$: function () {
+                                    var url = this.get('url');
+                                    if ($.type(url) === UNDEFINED) {
+                                        return 'application/octet-stream';
+                                    }
+                                    return typeFormatter(url);
+                                },
+                                url$: function () {
+                                    var url = this.get('url');
+                                    if ($.type(url) === UNDEFINED) {
+                                        return 'a file image by default'; // TODO
+                                    }
+                                    return urlFormatter(this.get('url'), that.options.schemes);
+                                }
+                            },
+                            total: 'total',
+                            type: 'json'
+                        },
                         // keep default sort order
-                        transport: $.isPlainObject(transport) ? transport : this.options.transport,
+                        transport: $.isPlainObject(transport) ? transport : that.options.transport,
                         pageSize: 12
                     })
-                    .bind(ERROR, this._errorHandler);
+                    .bind(ERROR, that._errorHandler);
 
-                this.dataSource.filter(this.options.filter);
+                // that.dataSource.filter(getDataSourceFilter(that.options.extensions));
 
             },
 
@@ -625,15 +708,11 @@
              * @private
              */
             _dataError: function (e) {
-                // TODO ----------------------------------------------------------------------------------------------------------------------------------
-
-                /*
-                var that = this,
-                    status;
-
+                var that = this;
                 if (!that.trigger(ERROR, e)) {
-                    status = e.xhr.status;
-
+                    /*
+                    // The following is code from kendo.ui.filebrowser
+                    var status = e.xhr.status;
                     if (e.status == 'error') {
                         if (status == '404') {
                             that._showMessage(that.options.messages.directoryNotFound);
@@ -643,8 +722,9 @@
                     } else if (status == 'timeout') {
                         that._showMessage('Error! Server timeout.');
                     }
+                    */
+                    that.dataSource.cancelChanges();
                 }
-                */
             },
 
             /**
@@ -655,7 +735,23 @@
             _clear: function () {
                 var that = this;
                 // unbind kendo
-                // kendo.unbind($(that.element));
+                kendo.unbind(that.element);
+                // remove drop down list
+                if (that.dropDownList) {
+                    that.dropDownList.destroy();
+                }
+                // remove pager
+                if (that.pager) {
+                    that.pager.destroy();
+                }
+                // remove list view
+                if (that.listView) {
+                    that.listView.destroy();
+                }
+                // Remove tabs
+                if (that.tabStrip) {
+                    that.tabStrip.destroy();
+                }
                 // unbind all other events
                 $(that.element).find('*').off();
                 $(that.element).off();

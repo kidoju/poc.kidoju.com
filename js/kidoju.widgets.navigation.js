@@ -9,11 +9,12 @@
 (function (f, define) {
     'use strict';
     define([
+        './window.assert',
+        './window.logger',
         './vendor/kendo/kendo.binder',
         './kidoju.data',
         './kidoju.tools',
-        './window.assert',
-        './window.log'
+        './kidoju.widgets.stage'
     ], f);
 })(function () {
 
@@ -32,7 +33,7 @@
         var Page = kidoju.data.Page;
         var PageCollectionDataSource = kidoju.data.PageCollectionDataSource;
         // var assert = window.assert;
-        var logger = new window.Log('kidoju.widgets.navigation');
+        var logger = new window.Logger('kidoju.widgets.navigation');
         var NULL = null;
         var NUMBER = 'number';
         var STRING = 'string';
@@ -102,6 +103,7 @@
             options: {
                 name: 'Navigation',
                 autoBind: true,
+                mode: kendo.ui.Stage.fn.modes.design,
                 itemTemplate: '<div data-#: ns #uid="#: uid #" class="kj-item" role="option" aria-selected="false"><div data-#: ns #role="stage"></div></div>',
                 pageWidth: 1024, // TODO: assuming page size here: where do we read it from?
                 pageHeight: 768,
@@ -128,6 +130,9 @@
             //    Widget.fn.setOptions.call(this, options);
             //    TODO: we need to read height and width both from styles and options and decide which wins
             // },
+
+            /* This function's cyclomatic complexity is too high. */
+            /* jshint -W074 */
 
             /**
              * Gets/Sets the index of the selected page in the navigation
@@ -160,6 +165,8 @@
                     throw new TypeError();
                 }
             },
+
+            /* jshint +W074 */
 
             /**
              * Gets/Sets the id of the selected page in the navigation
@@ -407,7 +414,9 @@
 
                     // Make the stage and bind to components
                     navigationItem.find(kendo.roleSelector('stage')).kendoStage({
-                        mode: kendo.ui.Stage.fn.modes.thumbnail,
+                        mode: that.options.mode,
+                        enable: false,
+                        readonly: true,
                         dataSource: page.components,
                         scale: that._getStageScale()
                     });

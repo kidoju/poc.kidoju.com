@@ -9,14 +9,17 @@
 (function (f, define) {
     'use strict';
     define([
-        './vendor/kendo/kendo.binder',
-        // './kidoju.tools'
         './window.assert',
-        './window.log'
+        './window.logger',
+        './vendor/kendo/kendo.binder'
+        // './kidoju.tools'
     ], f);
 })(function () {
 
     'use strict';
+
+    /* This function has too many statements. */
+    /* jshint -W071 */
 
     (function ($, undefined) {
 
@@ -24,7 +27,7 @@
         var kidoju = window.kidoju = window.kidoju || {};
         var models = kidoju.data = kidoju.data || {};
         var assert = window.assert;
-        var logger = new window.Log('kidoju.data');
+        var logger = new window.Logger('kidoju.data');
         var OBJECT = 'object';
         var STRING = 'string';
         // var BOOLEAN = 'boolean';
@@ -34,7 +37,11 @@
         // var ERROR = 'error';
         var ZERO_NUMBER = 0;
         var NEGATIVE_NUMBER = -1;
-        var RX_VALID_NAME = /^[a-z][a-z0-9_]{3,}$/i;
+        // var RX_VALID_NAME = /^[a-z][a-z0-9_]{3,}$/i; // TODO instead of val_
+        var location = window.location;
+        var workerLibPath = location.protocol + '//' + location.host + '/Kidoju.Widgets/src/js/kidoju.data.workerlib.js'; // TODO move to config files including minification
+        // var workerLibPath = location.protocol + '//' + location.host + '/src/js/kidoju.data.workerlib.js'; // for WEINRE
+        var workerTimeout = 250; // TODO: move to config
 
 
         /*********************************************************************************
@@ -215,6 +222,7 @@
              * @returns {boolean}
              */
             validate: function () {
+                /* jshint maxcomplexity: 8 */
                 var that = this;
                 var validated = true;
                 for (var field in that.fields) {
@@ -441,12 +449,13 @@
                 }
             },
 
+            /* jshint -W074 */
+            /* This function's cyclomatic complexity is too high. */
+
             /**
              * Constructor
              * @param component
              */
-            /* jshint -W074 */
-            /* This function's cyclomatic complexity is too high. */
             init: function (component) {
 
                 var that = this;
@@ -500,7 +509,7 @@
                     }
                 }
             },
-            /* jshint: +W074 */
+            /* jshint +W074 */
 
             /**
              * Get the parent page
@@ -606,12 +615,6 @@
                     nullable: true,
                     editable:false
                 },
-                instructions: {
-                    type: STRING
-                },
-                style: {
-                    type: STRING
-                },
                 components: {
                     // We cannot assign a data source as default value of a model
                     // because otherwise it might be reused amongst instances.
@@ -628,6 +631,15 @@
                             return new PageComponentCollectionDataSource(value);
                         }
                     }
+                },
+                explanations: { // displayed in review mode
+                    type: STRING
+                },
+                instructions: { // displayed in explanation mode
+                    type: STRING
+                },
+                style: {
+                    type: STRING
                 }
             },
 
@@ -732,6 +744,103 @@
         });
 
         /**
+         * WorkerPool
+         * @class WorkerPool
+         * @param concurrency
+         * @param timeOut
+         */
+        var WorkerPool = models.WorkerPool = function (concurrency, timeOut) {
+            // concurrency = concurrency || navigator.hardwareConcurrency || 4;
+            // Array of concurrent working threads
+            var workers = new Array(concurrency);
+            // Queue of tasks
+            var tasks = [];
+            // Array of deferreds
+            var deferreds = [];
+            // State of worker pool
+            var running = false;
+
+            /**
+             * Helper function to chain tasks on a thread
+             * Note: thread is a number between 0 and concurrency - 1 which designates an entry in the workers array
+             * @param thread
+             */
+            function runNextTask(thread) {
+                // console.log('run next task');
+                if (tasks.length > 0) {
+                    var task = tasks.shift();
+                    workers[thread] = new Worker(task.script);
+                    workers[thread].onmessage = function (e) {
+                        workers[thread].terminate();
+                        deferreds[task.id].resolve({ name: task.name, value: e.data });
+                        runNextTask(thread);
+                    };
+                    workers[thread].onerror = function (e) {
+                        workers[thread].terminate();
+                        // e is an ErrorEvent and e.error is null
+                        var error = new Error(e.message || 'Unknown error');
+                        error.taskname = task.name;
+                        error.filename = e.filename;
+                        error.colno = e.colno;
+                        error.lineno = e.lineno;
+                        deferreds[task.id].reject(error);
+                        logger.crit(error);
+                        // No need to run next task because $.when fails on the first failing deferred
+                        // runNextTask(thread);
+                    };
+                    workers[thread].postMessage(task.message);
+                    if ($.type(timeOut) === 'number') {
+                        setTimeout(function () {
+                            if (deferreds[task.id].state() === 'pending') {
+                                workers[thread].terminate();
+                                var error = new Error('The execution of a web worker has timed out');
+                                error.taskname = task.name;
+                                error.filename = task.script;
+                                error.timeout = true;
+                                deferreds[task.id].reject(error);
+                                logger.crit(error);
+                                // No need to run next task because $.when fails on the first failing deferred
+                                // runNextTask(thread);
+                            }
+                        }, timeOut);
+                    }
+                }
+            }
+
+            /***
+             * Add a task to the queue
+             * @param name
+             * @param script
+             * @param message
+             */
+            this.add = function (name, script, message) {
+                if (running) {
+                    throw new Error('Cannot add to running pool');
+                }
+                tasks.push({ name: name, script: script, message: message, id: tasks.length });
+                deferreds.push($.Deferred());
+            };
+
+            /**
+             * Run the work pool
+             * Note: Add all tasks first
+             * @returns {*}
+             */
+            this.run = function () {
+                if (running) {
+                    throw new Error('A worker pool cannot be executed twice');
+                }
+                running = true;
+                // Start each pool
+                for (var poolId = 0; poolId < workers.length; poolId++) {
+                    runNextTask(poolId);
+                }
+                // Return an array of deferreds
+                return $.when.apply($, deferreds);
+            };
+        };
+
+        /**
          * @class PageCollectionDataSource
          * @type {*|void|Object}
          */
@@ -792,67 +901,17 @@
             getTestFromProperties: function () {
                 var that = this;
                 var test = {};
-                $.each(that.data(), function (index, page) {
-                    $.each(page.components.data(), function (index, component) {
+                $.each(that.data(), function (pageIdx, page) {
+                    $.each(page.components.data(), function (componentIdx, component) {
                         var properties = component.properties;
                         if (properties instanceof kendo.data.Model &&
                             $.type(properties.fields) === OBJECT && !$.isEmptyObject(properties.fields) &&
                             $.type(properties.name) === STRING) {
-                            test[properties.name] = undefined;
+                            test[properties.name] = { value: undefined };
                         }
                     });
                 });
-                // TODO Consider returning an object cast with a model with type, default value and validation?
                 return test;
-            },
-
-            /**
-             * Validate a named value
-             * @param name
-             * @param code
-             * @param value
-             * @param solution
-             * @param all
-             * @returns {*}
-             */
-            validateNamedValue: function (name, code, value, solution, all) {
-                var dfd = $.Deferred();
-                if (!window.Worker) {
-                    dfd.reject({ filename: undefined, lineno: undefined, message: 'Web workers are not supported' });
-                    return dfd;
-                }
-                if ($.type(name) !== STRING || !RX_VALID_NAME.test(name)) {
-                    dfd.reject({ filename: undefined, lineno: undefined, message: 'A valid name has not been provided' });
-                    return dfd;
-                }
-                if ($.type(code) !== STRING) { // TODO review
-                    dfd.reject({ filename: undefined, lineno: undefined, message: 'Code has not been provided' });
-                    return dfd;
-                }
-                // TODO: Add prerequisites (some custom helpers)
-                // Note: we need postMessage(undefined) instead of postMessage() otherwise we get the following error:
-                // Uncaught TypeError: Failed to execute 'postMessage' on 'DedicatedWorkerGlobalScope': 1 argument required, but only 0 present.
-                var blob = new Blob(['onmessage=function (e) {' + code + 'if (typeof(e.data.value)==="undefined") {postMessage(undefined);}else{postMessage(validate(e.data.value,e.data.solution,e.data.all));}self.close();}']);
-                var blobURL = window.URL.createObjectURL(blob);
-
-                logger.debug(blobURL);
-
-                var worker = new Worker(blobURL);
-                worker.onmessage = function (e) {
-                    dfd.resolve({ name: name, result: e.data });
-                };
-                worker.onerror = function (err) {
-                    dfd.reject(err);
-                };
-                worker.postMessage({ value: value, solution: solution, all: all });
-                // terminate long workers (>50ms)
-                setTimeout(function () {
-                    worker.terminate();
-                    if (dfd.state() === 'pending') {
-                        dfd.reject({ filename: undefined, lineno: undefined, message: 'Timeout error' });
-                    }
-                }, 50);
-                return dfd.promise();
             },
 
             /**
@@ -863,12 +922,12 @@
              */
             validateTestFromProperties: function (test) {
 
-                // Note: the model being created on the fly, we only have an ObservableObject
+                // Note: the model being created on the fly (no kendo.data.Model)), we only have an ObservableObject to test
                 assert.instanceof(kendo.data.ObservableObject, test, kendo.format(assert.messages.instanceof.default, 'test', 'kendo.data.ObservableObject'));
 
                 var that = this;
                 var deferred = $.Deferred();
-                var promises = [];
+                var workerPool = new WorkerPool(window.navigator.hardwareConcurrency || 4, workerTimeout);
                 var result = {
                         score: 0,
                         max: 0,
@@ -893,29 +952,35 @@
                         }
                     };
 
-                // Sanitize test
-                // tools built upon kendo ui widgets cannot have undefined values because value(undefined) === value() so they use null
-                // requiring users to test null || undefined is too complicated so we turn null into undefined
+                // Flatten test for simpler validation formulas
                 var all = test.toJSON();
                 for (var prop in all) {
-                    if (all.hasOwnProperty(prop) && all[prop] === null) {
-                        all[prop] = undefined;
+                    if (all.hasOwnProperty(prop) && $.type(all[prop]) === OBJECT) {
+                        if (all[prop].value === null) {
+                            // tools built upon kendo ui widgets cannot have undefined values because value(undefined) === value() so they use null
+                            all[prop] = undefined; // TODO intervertir undefined and null: we should use null for unanswered tests
+                        } else {
+                            all[prop] = all[prop].value;
+                        }
                     }
                 }
 
+                // Add tasks to the worker pool
+                // Iterate through pages
                 $.each(that.data(), function (pageIdx, page) {
+                    // Iterate through page components
                     $.each(page.components.data(), function (componentIdx, component) {
 
+                        // List component properties
                         var properties = component.properties;
-                        var found;
-
                         assert.instanceof(kendo.data.Model, properties, kendo.format(assert.messages.instanceof.default, 'properties', 'kendo.data.Model'));
                         assert.type(OBJECT, properties.fields, kendo.format(assert.messages.type.default, 'properties.fields', OBJECT));
 
+                        // If our component has a name property to record the result of a test interaction
                         // Note: some components like textboxes have properties, others likes labels and images don't
                         // assert.type(STRING, properties.name, kendo.format(assert.messages.type.default, 'properties.name', STRING));
                         if ($.type(properties.name) === STRING) {
-
+                            var found;
                             var libraryMatches = properties.validation.match(/^\/\/ ([^\n]+)$/);
                             // var customMatches = value.match(/^function[\s]+validate[\s]*\([\s]*value[\s]*,[\s]*solution[\s]*(,[\s]*all[\s]*)?\)[\s]*\{[\s\S]*\}$/);
                             if ($.isArray(libraryMatches) && libraryMatches.length === 2) {
@@ -925,63 +990,83 @@
                                 });
                                 assert.ok($.isArray(found) && found.length, 'properties.validation cannot be found in code library');
                             }
+                            var code = $.isArray(found) ? found[0].formula : properties.validation;
 
-                            promises.push(that.validateNamedValue(
-                                properties.name,       // name
-                                $.isArray(found) ? found[0].formula : properties.validation,  // code
-                                all[properties.name],  // value
-                                properties.solution,   // solution
-                                all                    // all (hash object of values - that is test with null values turned into undefined)
-                            ));
+                            // Note: when e.data.value is undefined, we need to specifically call postMessage(undefined) instead of postMessage() otherwise we get the following error:
+                            // Uncaught TypeError: Failed to execute 'postMessage' on 'DedicatedWorkerGlobalScope': 1 argument required, but only 0 present.
+                            var blob = new Blob([
+                                'self.importScripts("' + workerLibPath + '");\n' +
+                                'self.onmessage = function (e) {\n' + code + '\nif (typeof e.data.value === "undefined") { self.postMessage(undefined); } else { self.postMessage(validate(e.data.value, e.data.solution, e.data.all)); } self.close(); };'
+                            ]);
+                            var blobURL = window.URL.createObjectURL(blob);
 
+                            // Queue task into worker pool with name, script, and value to be posted to script
+                            workerPool.add(
+                                properties.name,
+                                blobURL,
+                                {
+                                    value: all[properties.name],
+                                    solution: properties.solution,
+                                    all: all // all properties
+                                }
+                            );
+
+                            // Update result
                             result[properties.name] = {
                                 page: pageIdx,
                                 name: properties.name,
                                 description: properties.description,
-                                value: test[properties.name],
+                                value: test[properties.name].value,
                                 solution: properties.solution,
                                 result: undefined,
                                 omit: properties.omit,
                                 failure: properties.failure,
                                 success: properties.success
                             };
+
+                            logger.debug({ message: properties.name + ' added to the worker pool', data: blobURL });
                         }
                     });
                 });
 
-                $.when.apply($, promises)
+                // Run the worker pool
+                workerPool.run()
                     .done(function () {
+                        // iterate through recorded answer validations (arguments)
+                        // for each named value
                         $.each(arguments, function (index, argument) {
-                            result[argument.name].result = argument.result;
-                            switch (argument.result) {
-                                case true:
+                            // store the result which is success, failure or omitted (undefined)
+                            result[argument.name].result = argument.value;
+                            // store the score depending on the result
+                            switch (argument.value) {
+                                case true: // success
                                     if (result[argument.name] && $.type(result[argument.name].success) === NUMBER) {
                                         result[argument.name].score = result[argument.name].success;
                                     }
                                     break;
-                                case false:
+                                case false: // failure
                                     if (result[argument.name] && $.type(result[argument.name].failure) === NUMBER) {
                                         result[argument.name].score = result[argument.name].failure;
                                     }
                                     break;
-                                default:
+                                default: // undefined (omitted)
                                     if (result[argument.name] && $.type(result[argument.name].omit) === NUMBER) {
                                         result[argument.name].score = result[argument.name].omit;
                                     }
                                     break;
                             }
+                            // calculate the total test score
                             result.score += result[argument.name].score;
+                            // calculate the max possible score in order to calculate a percentage
                             if (result[argument.name] && result[argument.name].success) {
                                 result.max += result[argument.name].success;
                             }
-                            // if (result.max) {
-                            //  result.percent = result.score/result.max;
-                            // }
                         });
                         deferred.resolve(result);
                     })
                     .fail(deferred.reject);
 
+                // return the test result
                 return deferred.promise();
             }
         });
@@ -1126,6 +1211,8 @@
 
 
     }(window.jQuery));
+
+    /* jshint +W071 */
 
     return window.kidoju;
 

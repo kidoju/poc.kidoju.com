@@ -9,9 +9,9 @@
 (function (f, define) {
     'use strict';
     define([
-        './vendor/kendo/kendo.binder',
         './window.assert',
-        './window.log'
+        './window.logger',
+        './vendor/kendo/kendo.binder'
     ], f);
 })(function () {
 
@@ -32,7 +32,7 @@
         var ui = kendo.ui;
         var Widget = ui.Widget;
         // var assert = window.assert,
-        var logger = new window.Log('kidoju.widgets.rating');
+        var logger = new window.Logger('kidoju.widgets.rating');
         var NUMBER = 'number';
         var STAR = 'star';
         var STAR_P = '&#x2605;';
@@ -185,7 +185,7 @@
             },
 
             /**
-             * Toggle between editing modes
+             * Toggles between enabled and readonly modes
              * @private
              */
             _editable: function (options) {
@@ -214,6 +214,19 @@
                     disabled: !(enable = enable === undefined ? true : enable)
                 });
             },
+
+            /**
+             * Make the widget readonly
+             * @param readonly
+             */
+            /*
+            readonly: function (readonly) {
+                this._editable({
+                    readonly: readonly === undefined ? true : readonly,
+                    disable: false
+                });
+            },
+            */
 
             /**
              * Refreshes the widget

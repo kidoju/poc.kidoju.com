@@ -9,10 +9,10 @@
 (function (f, define) {
     'use strict';
     define([
-        './vendor/kendo/kendo.binder',
-        './vendor/kendo/kendo.dropdownlist',
         './window.assert',
-        './window.log'
+        './window.logger',
+        './vendor/kendo/kendo.binder',
+        './vendor/kendo/kendo.dropdownlist'
     ], f);
 })(function () {
 
@@ -24,7 +24,7 @@
         var ui = kendo.ui;
         var Widget = ui.Widget;
         var assert = window.assert;
-        var logger = new window.Log('kidoju.widgets.quiz');
+        var logger = new window.Logger('kidoju.widgets.quiz');
         var NS = '.kendoQuiz';
         var STRING = 'string';
         var UNDEFINED = 'undefined';
@@ -110,11 +110,7 @@
                 that.setOptions(that.options);
                 that._layout();
                 that._dataSource();
-                that._enable = true;
-                if (!that.options.enable) {
-                    that._enable = false;
-                    that.wrapper.addClass(DISABLE);
-                }
+                that.enable(that.options.enable);
             },
 
             /**
@@ -172,9 +168,19 @@
              */
             value: function (value) {
                 var that = this;
-                if ($.type(value) === STRING || value === null) {
-                    that._value = value;
-                    that._toggleUI();
+                if ($.type(value) === STRING) {
+                    // Note: Giving a value to the dropDownList that does not exist in dataSource is discarded without raising an error
+                    if (that._value !== value && that.dataSource instanceof kendo.data.DataSource && that.dataSource.data().indexOf(value) > -1) {
+                        that._value = value;
+                        that._toggleUI();
+                        that.trigger(CHANGE);
+                    }
+                } else if (value === null) {
+                    if (that._value !== value) {
+                        that._value = null;
+                        that._toggleUI();
+                        that.trigger(CHANGE);
+                    }
                 } else if ($.type(value) === 'undefined') {
                     return that._value;
                 } else {
@@ -244,7 +250,7 @@
                 that.groupList = $('<div>')
                     .addClass(GROUP_CLASS)
                     .css(that.options.groupStyle)
-                    .on(CLICK + NS, 'input', $.proxy(that._onClick, that))
+                    // .on(CLICK + NS, 'input', $.proxy(that._onClick, that))
                     .appendTo(that.element);
             },
 
@@ -396,19 +402,26 @@
              * @param enable
              */
             enable: function (enable) {
-                var wrapper = this.wrapper;
-
+                var that = this;
                 if (typeof enable === UNDEFINED) {
                     enable = true;
                 }
-
-                if (enable) {
-                    wrapper.removeClass(DISABLE);
-                } else {
-                    wrapper.addClass(DISABLE);
+                if (that.dropDownList) {
+                    that.dropDownList.enable(enable);
                 }
-
-                this._enable = this.options.enable = enable;
+                if (that.groupList) {
+                    that.groupList.off(NS);
+                    if (enable) {
+                        that.groupList.on(CLICK + NS, 'input', $.proxy(that._onClick, that));
+                    } else {
+                        // Because input are readonly and not disabled, we need to prevent default (checking checkbox) and let it bubble to the stage element to display the handle box
+                        that.groupList.on(CLICK + NS, 'input', function (e) { e.preventDefault(); });
+                    }
+                    that.groupList.find('input')
+                        .toggleClass(DISABLE, !enable)
+                        // .prop('disabled', !enable) <--- suppresses the click event so elements are no more selectable in design mode
+                        .prop('readonly', !enable);
+                }
             },
 
             /**
@@ -418,7 +431,11 @@
             _clear: function () {
                 var that = this;
                 // unbind kendo
-                kendo.unbind($(that.element));
+                kendo.unbind(that.element);
+                // Destroy drop down list (especially the popup)
+                if (that.dropDownList) {
+                    that.dropDownList.destroy();
+                }
                 // unbind all other events
                 that.element.find('*').off(NS);
                 // remove descendants

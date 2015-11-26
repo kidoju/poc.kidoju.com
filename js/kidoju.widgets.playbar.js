@@ -9,11 +9,11 @@
 (function (f, define) {
     'use strict';
     define([
+        './window.assert',
+        './window.logger',
         './vendor/kendo/kendo.binder',
         './kidoju.data',
-        './kidoju.tools',
-        './window.assert',
-        './window.log'
+        './kidoju.tools'
     ], f);
 })(function () {
 
@@ -31,7 +31,7 @@
         var Page = kidoju.data.Page;
         var PageCollectionDataSource = kidoju.data.PageCollectionDataSource;
         // var assert = window.assert;
-        var logger = new window.Log('kidoju.widgets.playbar');
+        var logger = new window.Logger('kidoju.widgets.playbar');
         var STRING = 'string';
         var NUMBER = 'number';
         var NULL = null;
@@ -41,12 +41,11 @@
         var DATABOUND = 'dataBound';
         var KEYDOWN = 'keydown';
         var NS = '.kendoPlayBar';
-        var WIDGET_CLASS = 'k-widget k-pager-wrap kj-playbar';
+        var WIDGET_CLASS = 'k-widget k-pager-wrap k-floatwrap kj-playbar';
         var FIRST = '.k-i-seek-w';
         var LAST = '.k-i-seek-e';
         var PREV = '.k-i-arrow-w';
         var NEXT = '.k-i-arrow-e';
-        var TICK = '.k-i-tick';
 
         /*********************************************************************************
          * Helpers
@@ -142,6 +141,7 @@
                 // value: undefined
                 iconTemplate: '<a href="\\#" title="#:text#" class="k-link k-pager-nav #= wrapClassName #"><span class="k-icon #= className #">#:text#</span></a>',
                 selectTemplate: '<li><span class="k-state-selected">#: text #</span></li>',
+                currentPageTemplate: '<li class="k-current-page"><span class="k-link k-pager-nav">#=text#</span></li>',
                 linkTemplate: '<li><a tabindex="-1" href="\\#" class="k-link" data-#=ns#index="#=idx#" #if (title !== "") {# title="#=title#" #}#>#:text#</a></li>',
                 buttonCount: 10,
                 autoBind: true,
@@ -150,7 +150,6 @@
                 info: true,
                 input: false,
                 previousNext: true,
-                tick: true,
                 refresh: true,
                 messages: {
                     empty: 'No page to display',
@@ -160,7 +159,6 @@
                     previous: 'Go to the previous page',
                     next: 'Go to the next page',
                     last: 'Go to the last page',
-                    tick: 'Submit and check results',
                     refresh: 'Refresh',
                     morePages: 'More pages'
                 }
@@ -285,7 +283,7 @@
              * @returns {*}
              */
             items: function () {
-                return this.element.find('ul.k-pager-numbers')[0].children;
+                return this.element.find('ul.k-pager-numbers').children('li:not(.k-current-page)').get();
             },
 
 
@@ -298,6 +296,7 @@
                 that.iconTemplate = kendo.template(that.options.iconTemplate);
                 that.linkTemplate = kendo.template(that.options.linkTemplate);
                 that.selectTemplate = kendo.template(that.options.selectTemplate);
+                that.currentPageTemplate = kendo.template(that.options.currentPageTemplate);
             },
 
             /**
@@ -408,11 +407,6 @@
                     }
                 }
 
-                // Add tick
-                if (options.tick) {
-                    playbar.append(icon(that.iconTemplate, TICK, options.messages.tick, 'k-pager-tick'));
-                }
-
                 // Add refresh button
                 if (options.refresh) {
                     if (!playbar.find('.k-pager-refresh').length) {
@@ -432,7 +426,8 @@
                 // Add click handler
                 playbar
                     .addClass(WIDGET_CLASS)
-                    .on(CLICK + NS, 'a', $.proxy(that._navClick, that));
+                    .on(CLICK + NS, 'a', $.proxy(that._navClick, that))
+                    .on(CLICK + NS, '.k-current-page', $.proxy(that._toggleDropDown, that));
 
 
                 // if (options.autoBind) {
@@ -495,7 +490,9 @@
                     if (html === '') {
                         html = that.selectTemplate({ text: 0 });
                     }
-                    that.list.html(html);
+                    // Add drop down when there is not enough space to display numeric button
+                    html = that.currentPageTemplate({ text: index + 1 }) + html;
+                    that.list.removeClass('k-state-expanded').html(html);
                 }
 
                 // Update info
@@ -570,6 +567,14 @@
             },
 
             /**
+             * Toggle the drop down list of numeric buttons
+             * @private
+             */
+            _toggleDropDown: function () {
+                this.list.toggleClass('k-state-expanded');
+            },
+
+            /**
              *
              * @method _indexClick
              * @param e
@@ -583,8 +588,6 @@
                         var index = parseInt(target.attr(kendo.attr('index')), 10);
                         if (!isNaN(index)) {
                             this.index(index);
-                        } else if (target.hasClass('k-pager-tick')) {
-                            this.trigger(CLICK); // Clicking on tick
                         }
                     }
                 }
