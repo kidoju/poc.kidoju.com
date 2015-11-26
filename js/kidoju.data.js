@@ -39,6 +39,7 @@
         var NEGATIVE_NUMBER = -1;
         // var RX_VALID_NAME = /^[a-z][a-z0-9_]{3,}$/i; // TODO instead of val_
         var location = window.location;
+        // var workerLibPath = location.protocol + '//' + location.host + '/poc.kidoju.com/js/kidoju.data.workerlib.js'; // TODO move to config files including minification
         var workerLibPath = location.protocol + '//' + location.host + '/js/kidoju.data.workerlib.js'; // TODO move to config files including minification
         // var workerLibPath = location.protocol + '//' + location.host + '/src/js/kidoju.data.workerlib.js'; // for WEINRE
         var workerTimeout = 500; // TODO: move to config
@@ -965,7 +966,7 @@
                     }
                 }
 
-                $.get(workerLibPath)
+                $.ajax({ url: workerLibPath, cache: true, dataType: 'text' })
                     .done(function (workerLib) {
 
                         // Add tasks to the worker pool
