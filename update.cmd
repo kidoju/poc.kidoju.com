@@ -12,9 +12,9 @@ COPY ..\Kidoju.Widgets\src\kidoju.integration.designmode.html .\index.html /Y
 ATTRIB +R .\index.html
 
 REM copy kidoju.integration.playmode.html
-ATTRIB -R .\kidoju.integration.playmode.html
-COPY ..\Kidoju.Widgets\src\kidoju.integration.playmode.html .\ /Y
-ATTRIB +R .\kidoju.integration.playmode.html
+ATTRIB -R .\play.html
+COPY ..\Kidoju.Widgets\src\kidoju.integration.playmode.html .\play.html /Y
+ATTRIB +R .\play.html
 
 REM Copy data
 XCOPY ..\Kidoju.Widgets\test\data .\data /E /I /R /Y

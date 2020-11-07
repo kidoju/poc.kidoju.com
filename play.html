@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>kidoju.integration.playmode</title>
+    <title>play</title>
     <!-- weinre - see http://people.apache.org/~pmuellr/weinre/docs/latest -->
     <!--script src="http://10.0.0.105:8080/target/target-script-min.js#anonymous"></script-->
     <script>
@@ -43,8 +43,10 @@
             height: 48px;
             background-color: #001111;
         }
-        header>img {
-            padding: 2px 5px;
+        header>h1 {
+            color: white;
+            padding: 0.25em;
+            margin: 0;
         }
         #wrapper {
             position: absolute;
@@ -80,7 +82,7 @@
 </head>
 <body>
 <header>
-    <img src="./styles/images/KdjLogoBB.png" alt="Kidoju Logo">
+    <h1>Eduthon</h1>
 </header>
 <main>
     <div id="toolbar"></div>
@@ -467,16 +469,11 @@
                 items: [
                     { template: '<div data-role="playbar" data-bind="source: stream.pages, value: currentPage" data-refresh="false" data-button-count="5" class="kj-top" style="width:450px;border:none;background:none;" ></div>' },
                     { type: 'separator' },
-                    { type: 'button', id: 'submit', text: 'Submit' },
+                    { type: 'button', id: 'submit', text: 'Submit', primary: true },
                     { type: 'button', id: 'score', text: 'Score', hidden: true },
                     { type: 'button', id: 'review', text: 'Review', enable: false },
-                    { id: 'help', type: 'button', text: 'Help', click: function(e) {
-                        var height = 600;
-                        var width = 800;
-                        var left = window.screenX + ($(window).width() - width) / 2;
-                        var top = window.screenY + ($(window).height() - height) / 2;
-                        window.open('./UserGuide.pdf', 'help', 'top=' + top + ', left=' + left + ', width=' + width + ', height=' + height + ', directories=no, location=no, menubar=no, status=no, titlebar=no, toolbar=no');
-                    } }
+                    { type: 'separator' },
+                    { type: 'button', id: 'design', text: 'Design', enable: true }
                 ],
                 click: function (e) {
                     var sections = $('div.centered>div');
@@ -507,6 +504,8 @@
                         }
                         sections.first().css('display', 'block');
                         sections.last().css('display', 'none');
+                    } else if (e.id === 'design') {
+                        window.location.assign('index.html');
                     }
                 }
             });
